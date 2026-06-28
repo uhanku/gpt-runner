@@ -26,6 +26,7 @@ import type {} from 'multer';
 import { BearerAuthGuard } from './bearer-auth.guard';
 import { CreateJobDto } from './dto/create-job.dto';
 import { JobsService } from './jobs.service';
+import { PublicRoute } from './public-route.decorator';
 
 @ApiTags('jobs')
 @ApiBearerAuth('bearer')
@@ -149,12 +150,18 @@ export class JobsController {
   }
 
   @Get(':jobId/artifact')
+  @PublicRoute()
   downloadArtifact(
     @Param('jobId') jobId: string,
     @Query('path') artifactPath: string,
+    @Query('signature') signature: string,
     @Res() res: Response,
   ) {
-    const file = this.jobsService.getArtifactFile(jobId, artifactPath);
+    const file = this.jobsService.getArtifactFile(
+      jobId,
+      artifactPath,
+      signature,
+    );
     return res.download(file.absolutePath, file.filename);
   }
 

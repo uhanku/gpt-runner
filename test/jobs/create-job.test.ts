@@ -11,7 +11,12 @@ import {
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { beforeEach, afterEach, describe, test } from 'node:test';
-import { ValidationPipe, BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  InternalServerErrorException,
+  UnauthorizedException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { CreateJobDto } from '../../src/jobs/dto/create-job.dto';
 import { JobsService } from '../../src/jobs/jobs.service';
 import { JobLogsStore } from '../../src/jobs/job-logs.store';
@@ -479,13 +484,22 @@ describe('JobsService.listArtifacts', () => {
   })();
   let tempRoot: string;
   let storageRoot: string;
+  let previousPublicArtifactSecret: string | undefined;
 
   beforeEach(() => {
+    previousPublicArtifactSecret = process.env.PUBLIC_ARTIFACT_SECRET;
+    process.env.PUBLIC_ARTIFACT_SECRET = 'test-public-artifact-secret';
     tempRoot = mkdtempSync(path.join(tmpdir(), 'gpt-runner-artifacts-'));
     storageRoot = path.join(tempRoot, 'storage');
   });
 
   afterEach(() => {
+    if (previousPublicArtifactSecret === undefined) {
+      delete process.env.PUBLIC_ARTIFACT_SECRET;
+    } else {
+      process.env.PUBLIC_ARTIFACT_SECRET = previousPublicArtifactSecret;
+    }
+
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
@@ -514,16 +528,28 @@ describe('JobsService.listArtifacts', () => {
 
     const response = service.listArtifacts(job_id, 'https://api.example.test/');
 
-    assert.deepEqual(response, {
+    assert.equal(response.job_id, job_id);
+    assert.equal(response.artifacts.length, 1);
+    assert.equal(response.artifacts[0].name, 'nested/report one.txt');
+    assert.equal(response.artifacts[0].size_bytes, 11);
+
+    const downloadUrl = new URL(response.artifacts[0].download_url);
+    assert.equal(
+      downloadUrl.origin + downloadUrl.pathname,
+      `https://api.example.test/jobs/${job_id}/artifact`,
+    );
+    assert.equal(downloadUrl.searchParams.get('path'), 'nested/report one.txt');
+    assert.match(downloadUrl.searchParams.get('signature') || '', /^[0-9a-f]{64}$/);
+
+    const file = service.getArtifactFile(
       job_id,
-      artifacts: [
-        {
-          name: 'nested/report one.txt',
-          size_bytes: 11,
-          download_url: `https://api.example.test/jobs/${job_id}/artifact?path=nested%2Freport%20one.txt`,
-        },
-      ],
-    });
+      'nested/report one.txt',
+      downloadUrl.searchParams.get('signature') || '',
+    );
+    assert.equal(
+      file.absolutePath,
+      path.join(artifactsDir, 'nested', 'report one.txt'),
+    );
   });
 
   test('uses PUBLIC_BASE_URL before the request origin for artifact URLs', () => {
@@ -555,7 +581,9 @@ describe('JobsService.listArtifacts', () => {
 
       assert.equal(
         response.artifacts[0].download_url,
-        `https://public.example.test/jobs/${job_id}/artifact?path=report.txt`,
+        `https://public.example.test/jobs/${job_id}/artifact?path=report.txt&signature=${new URL(
+          response.artifacts[0].download_url,
+        ).searchParams.get('signature')}`,
       );
     } finally {
       if (previousPublicBaseUrl === undefined) {
@@ -564,6 +592,78 @@ describe('JobsService.listArtifacts', () => {
         process.env.PUBLIC_BASE_URL = previousPublicBaseUrl;
       }
     }
+  });
+
+  test('rejects missing or mismatched artifact signatures', () => {
+    const logsStore = {
+      append: async () => undefined,
+      tail: async () => '',
+      deleteByJobId: async () => undefined,
+      recent: async () => [],
+      onModuleInit: async () => undefined,
+      onModuleDestroy: async () => undefined,
+    } as unknown as JobLogsStore;
+
+    const service = new JobsService(logsStore, storageRoot, noopScheduler);
+    const { job_id } = service.createJob({
+      commands: ['python3 --version'],
+    });
+    const otherJob = service.createJob({
+      commands: ['node --version'],
+    });
+
+    const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
+    writeFileSync(path.join(artifactsDir, 'report.txt'), 'ok', 'utf8');
+    writeFileSync(path.join(artifactsDir, 'other.txt'), 'ok', 'utf8');
+
+    const response = service.listArtifacts(job_id, 'https://api.example.test');
+    const report = response.artifacts.find((artifact) => artifact.name === 'report.txt');
+    assert.ok(report);
+    const signature = new URL(report.download_url).searchParams.get('signature');
+    assert.ok(signature);
+
+    assert.throws(
+      () => service.getArtifactFile(job_id, 'report.txt', ''),
+      UnauthorizedException,
+    );
+    assert.throws(
+      () => service.getArtifactFile(job_id, 'report.txt', 'not-hex'),
+      UnauthorizedException,
+    );
+    assert.throws(
+      () => service.getArtifactFile(job_id, 'other.txt', signature),
+      UnauthorizedException,
+    );
+    assert.throws(
+      () => service.getArtifactFile(otherJob.job_id, 'report.txt', signature),
+      UnauthorizedException,
+    );
+  });
+
+  test('requires PUBLIC_ARTIFACT_SECRET to generate artifact URLs', () => {
+    delete process.env.PUBLIC_ARTIFACT_SECRET;
+
+    const logsStore = {
+      append: async () => undefined,
+      tail: async () => '',
+      deleteByJobId: async () => undefined,
+      recent: async () => [],
+      onModuleInit: async () => undefined,
+      onModuleDestroy: async () => undefined,
+    } as unknown as JobLogsStore;
+
+    const service = new JobsService(logsStore, storageRoot, noopScheduler);
+    const { job_id } = service.createJob({
+      commands: ['python3 --version'],
+    });
+
+    const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
+    writeFileSync(path.join(artifactsDir, 'report.txt'), 'ok', 'utf8');
+
+    assert.throws(
+      () => service.listArtifacts(job_id, 'https://api.example.test'),
+      InternalServerErrorException,
+    );
   });
 });
 

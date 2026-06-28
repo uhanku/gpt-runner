@@ -1,9 +1,11 @@
 import {
   BadRequestException,
   Inject,
+  InternalServerErrorException,
   Injectable,
-  Optional,
   NotFoundException,
+  Optional,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { spawn } from 'node:child_process';
 import type {} from 'multer';
@@ -18,7 +20,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { CreateJobDto } from './dto/create-job.dto';
 import { JobLogsStore, RecentJobLogEntry } from './job-logs.store';
 
@@ -185,9 +187,12 @@ export class JobsService {
     const base = this.artifactsDir(jobId);
     const files = this.walkFiles(base).map((absolutePath) => {
       const rel = path.relative(base, absolutePath).replaceAll(path.sep, '/');
-      const downloadPath = `/jobs/${jobId}/artifact?path=${encodeURIComponent(
-        rel,
-      )}`;
+      const signature = this.signArtifactPath(jobId, rel);
+      const params = new URLSearchParams({
+        path: rel,
+        signature,
+      });
+      const downloadPath = `/jobs/${jobId}/artifact?${params.toString()}`;
 
       return {
         name: rel,
@@ -202,12 +207,14 @@ export class JobsService {
     };
   }
 
-  getArtifactFile(jobId: string, artifactPath: string) {
+  getArtifactFile(jobId: string, artifactPath: string, signature: string) {
     this.readStatus(jobId);
 
     if (!artifactPath) {
       throw new BadRequestException('Missing artifact path');
     }
+
+    this.verifyArtifactSignature(jobId, artifactPath, signature);
 
     const base = path.resolve(this.artifactsDir(jobId));
     const target = path.resolve(base, artifactPath);
@@ -523,6 +530,54 @@ export class JobsService {
 
   private absoluteUrl(baseUrl: string, pathAndQuery: string): string {
     return baseUrl ? `${baseUrl}${pathAndQuery}` : pathAndQuery;
+  }
+
+  private signArtifactPath(jobId: string, artifactPath: string): string {
+    const secret = this.publicArtifactSecret();
+
+    return createHmac('sha256', secret)
+      .update(this.artifactSignaturePayload(jobId, artifactPath), 'utf8')
+      .digest('hex');
+  }
+
+  private verifyArtifactSignature(
+    jobId: string,
+    artifactPath: string,
+    signature: string,
+  ) {
+    if (!signature) {
+      throw new UnauthorizedException('Missing artifact signature');
+    }
+
+    if (!/^[0-9a-f]{64}$/i.test(signature)) {
+      throw new UnauthorizedException('Invalid artifact signature');
+    }
+
+    const expected = Buffer.from(
+      this.signArtifactPath(jobId, artifactPath),
+      'hex',
+    );
+    const actual = Buffer.from(signature, 'hex');
+
+    if (!timingSafeEqual(expected, actual)) {
+      throw new UnauthorizedException('Invalid artifact signature');
+    }
+  }
+
+  private artifactSignaturePayload(jobId: string, artifactPath: string): string {
+    return `${jobId}\n${artifactPath}`;
+  }
+
+  private publicArtifactSecret(): string {
+    const secret = process.env.PUBLIC_ARTIFACT_SECRET;
+
+    if (!secret) {
+      throw new InternalServerErrorException(
+        'Server misconfigured: PUBLIC_ARTIFACT_SECRET is not set.',
+      );
+    }
+
+    return secret;
   }
 
   private jobDir(jobId: string): string {

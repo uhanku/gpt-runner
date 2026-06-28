@@ -15,6 +15,7 @@ npm ci
 Copy `.env.example` to `.env` and set at least:
 
 - `ACTION_API_KEY`
+- `PUBLIC_ARTIFACT_SECRET`
 - `MONGO_URI`
 - `MONGO_DB`
 - `MONGO_LOGS_COLLECTION`
@@ -59,7 +60,7 @@ Set `PUBLIC_BASE_URL` to the externally reachable API origin used in generated j
 Swagger UI is available at `http://127.0.0.1:8000/docs`.
 
 Job files and artifacts are stored under the repo-local `./storage/<jobId>/...` directory relative to the process working directory.
-Artifact download URLs are returned from `GET /jobs/<jobId>/artifacts` and continue to require the bearer API key.
+Artifact download URLs are returned from authenticated `GET /jobs/<jobId>/artifacts`. The returned artifact download URLs are public signed URLs that require a valid `signature` query parameter generated with `PUBLIC_ARTIFACT_SECRET`.
 
 # FLOWCHART
 
