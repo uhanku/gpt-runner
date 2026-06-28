@@ -60,6 +60,29 @@ export class JobsController {
         timeout_seconds: { type: 'integer', default: 300, maximum: 900 },
         network: { type: 'string', enum: ['on', 'off'], default: 'on' },
         root: { type: 'boolean', default: false },
+        openaiFileIdRefs: {
+          type: 'array',
+          maxItems: 10,
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              download_url: { type: 'string', format: 'uri' },
+              download_link: {
+                type: 'string',
+                format: 'uri',
+                description: 'Alias for download_url.',
+              },
+            },
+            required: ['name'],
+            anyOf: [
+              { required: ['download_url'] },
+              { required: ['download_link'] },
+            ],
+          },
+          description:
+            'ChatGPT Action file references to download into /workspace before the job starts.',
+        },
         files: {
           type: 'array',
           items: {
@@ -79,7 +102,7 @@ export class JobsController {
       },
     }),
   )
-  createJob(
+  async createJob(
     @Body() dto: CreateJobDto,
     @UploadedFiles() files: Express.Multer.File[] = [],
     @Req() request: Request,

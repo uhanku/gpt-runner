@@ -26,6 +26,9 @@ import { JobLogsStore, RecentJobLogEntry } from './job-logs.store';
 
 export const JOB_STORAGE_ROOT = 'JOB_STORAGE_ROOT';
 export const JOB_SCHEDULE_IMMEDIATE = 'JOB_SCHEDULE_IMMEDIATE';
+export const JOB_FILE_FETCH = 'JOB_FILE_FETCH';
+
+const MAX_WORKSPACE_FILE_BYTES = 50 * 1024 * 1024;
 
 type JobState =
   | 'queued'
@@ -52,6 +55,8 @@ export interface JobSummary {
   return_code: number | null;
 }
 
+type FileFetch = typeof fetch;
+
 @Injectable()
 export class JobsService {
   private readonly appRoot: string;
@@ -69,12 +74,15 @@ export class JobsService {
     @Optional()
     @Inject(JOB_SCHEDULE_IMMEDIATE)
     private readonly scheduleImmediate: typeof setImmediate = setImmediate,
+    @Optional()
+    @Inject(JOB_FILE_FETCH)
+    private readonly fileFetch: FileFetch = fetch,
   ) {
     this.appRoot = storageRoot || path.resolve(process.cwd(), 'storage');
     mkdirSync(this.appRoot, { recursive: true });
   }
 
-  createJob(
+  async createJob(
     dto: CreateJobDto,
     files: Express.Multer.File[] = [],
     fallbackBaseUrl?: string,
@@ -97,6 +105,8 @@ export class JobsService {
     for (const file of files) {
       this.storeWorkspaceFile(jobId, file);
     }
+
+    await this.storeChatGptFileReferences(jobId, dto);
 
     this.scheduleImmediate(() => {
       this.runJob(jobId, dto);
@@ -446,14 +456,61 @@ export class JobsService {
       throw new BadRequestException('Missing file');
     }
 
-    const filename = path.basename(file.originalname || 'upload.bin');
+    return this.storeWorkspaceBuffer(
+      jobId,
+      file.originalname || 'upload.bin',
+      file.buffer,
+    );
+  }
+
+  private async storeChatGptFileReferences(jobId: string, dto: CreateJobDto) {
+    for (const fileRef of dto.openaiFileIdRefs ?? []) {
+      const downloadUrl = fileRef.download_url ?? fileRef.download_link;
+      if (!downloadUrl) {
+        throw new BadRequestException(
+          `Missing download URL for referenced file: ${fileRef.name}`,
+        );
+      }
+
+      const response = await this.fileFetch(downloadUrl);
+
+      if (!response.ok) {
+        throw new BadRequestException(
+          `Failed to download referenced file: ${fileRef.name}`,
+        );
+      }
+
+      const contentLength = response.headers.get('content-length');
+      if (
+        contentLength &&
+        Number.isFinite(Number(contentLength)) &&
+        Number(contentLength) > MAX_WORKSPACE_FILE_BYTES
+      ) {
+        throw new BadRequestException(
+          `Referenced file is too large: ${fileRef.name}`,
+        );
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (buffer.byteLength > MAX_WORKSPACE_FILE_BYTES) {
+        throw new BadRequestException(
+          `Referenced file is too large: ${fileRef.name}`,
+        );
+      }
+
+      this.storeWorkspaceBuffer(jobId, fileRef.name, buffer);
+    }
+  }
+
+  private storeWorkspaceBuffer(jobId: string, originalName: string, buffer: Buffer) {
+    const filename = path.basename(originalName || 'upload.bin');
     if (!filename || filename === '.' || filename === '..') {
       throw new BadRequestException('Invalid file name');
     }
 
     const destination = path.join(this.workspaceDir(jobId), filename);
 
-    writeFileSync(destination, file.buffer);
+    writeFileSync(destination, buffer);
     chmodSync(destination, 0o666);
 
     return filename;

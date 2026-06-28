@@ -6,6 +6,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
@@ -179,7 +180,7 @@ describe('JobsService.createJob', () => {
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  test('returns the queued job envelope immediately', () => {
+  test('returns the queued job envelope immediately', async () => {
     const logsStore = {
       append: async () => undefined,
       tail: async () => '',
@@ -190,7 +191,7 @@ describe('JobsService.createJob', () => {
     } as unknown as JobLogsStore;
 
     const service = new JobsService(logsStore, storageRoot, noopScheduler);
-    const response = service.createJob(
+    const response = await service.createJob(
       {
         commands: ['python3 --version'],
       },
@@ -214,7 +215,7 @@ describe('JobsService.createJob', () => {
     assert.ok(existsSync(statusFile));
   });
 
-  test('keeps host-created files under local storage even when GPT_API_ROOT is set', () => {
+  test('keeps host-created files under local storage even when GPT_API_ROOT is set', async () => {
     const ignoredRoot = path.join(tmpdir(), 'gpt-runner-ignored-root');
     process.env.GPT_API_ROOT = ignoredRoot;
 
@@ -229,7 +230,7 @@ describe('JobsService.createJob', () => {
       } as unknown as JobLogsStore;
 
       const service = new JobsService(logsStore, storageRoot, noopScheduler);
-      const response = service.createJob({
+      const response = await service.createJob({
         commands: ['python3 --version'],
       });
 
@@ -242,7 +243,7 @@ describe('JobsService.createJob', () => {
     }
   });
 
-  test('uses PUBLIC_BASE_URL before the request origin for response URLs', () => {
+  test('uses PUBLIC_BASE_URL before the request origin for response URLs', async () => {
     const previousPublicBaseUrl = process.env.PUBLIC_BASE_URL;
     process.env.PUBLIC_BASE_URL = 'https://public.example.test/';
 
@@ -257,7 +258,7 @@ describe('JobsService.createJob', () => {
       } as unknown as JobLogsStore;
 
       const service = new JobsService(logsStore, storageRoot, noopScheduler);
-      const response = service.createJob(
+      const response = await service.createJob(
         {
           commands: ['python3 --version'],
         },
@@ -282,7 +283,7 @@ describe('JobsService.createJob', () => {
     }
   });
 
-  test('stores create-time uploads before scheduling the job', () => {
+  test('stores create-time uploads before scheduling the job', async () => {
     const logsStore = {
       append: async () => undefined,
       tail: async () => '',
@@ -311,7 +312,7 @@ describe('JobsService.createJob', () => {
     }) as typeof setImmediate;
 
     const service = new JobsService(logsStore, storageRoot, scheduler);
-    const response = service.createJob(
+    const response = await service.createJob(
       {
         commands: ['cat input.txt'],
       },
@@ -325,6 +326,163 @@ describe('JobsService.createJob', () => {
 
     assert.equal(scheduled, true);
     assert.match(response.job_id, /^[0-9a-f-]{36}$/i);
+  });
+
+  test('accepts ChatGPT file references in the validated payload', async () => {
+    const pipe = new ValidationPipe({
+      transform: true,
+      whitelist: true,
+    });
+    const result = await pipe.transform(
+      {
+        commands: ['cat input.txt'],
+        openaiFileIdRefs: [
+          {
+            name: '../input.txt',
+            download_link: 'https://files.example.test/input.txt',
+          },
+        ],
+      },
+      {
+        type: 'body',
+        metatype: CreateJobDto,
+      } as never,
+    );
+
+    assert.equal(result.openaiFileIdRefs?.[0].name, '../input.txt');
+    assert.equal(
+      result.openaiFileIdRefs?.[0].download_link,
+      'https://files.example.test/input.txt',
+    );
+  });
+
+  test('rejects invalid ChatGPT file references', async () => {
+    const pipe = new ValidationPipe({
+      transform: true,
+      whitelist: true,
+    });
+    const cases = [
+      {
+        commands: ['cat input.txt'],
+        openaiFileIdRefs: [{ download_url: 'https://files.example.test/a' }],
+      },
+      {
+        commands: ['cat input.txt'],
+        openaiFileIdRefs: [{ name: 'input.txt' }],
+      },
+      {
+        commands: ['cat input.txt'],
+        openaiFileIdRefs: [
+          { name: 'input.txt', download_url: 'http://files.example.test/a' },
+        ],
+      },
+      {
+        commands: ['cat input.txt'],
+        openaiFileIdRefs: Array.from({ length: 11 }, (_, index) => ({
+          name: `input-${index}.txt`,
+          download_url: `https://files.example.test/${index}`,
+        })),
+      },
+    ];
+
+    for (const payload of cases) {
+      await assert.rejects(
+        () =>
+          pipe.transform(payload, {
+            type: 'body',
+            metatype: CreateJobDto,
+          } as never),
+        BadRequestException,
+      );
+    }
+  });
+
+  test('stages ChatGPT file references before scheduling the job', async () => {
+    const logsStore = {
+      append: async () => undefined,
+      tail: async () => '',
+      deleteByJobId: async () => undefined,
+      recent: async () => [],
+      onModuleInit: async () => undefined,
+      onModuleDestroy: async () => undefined,
+    } as unknown as JobLogsStore;
+
+    let scheduled = false;
+    const scheduler = ((callback: (...args: any[]) => void) => {
+      void callback;
+      scheduled = true;
+
+      const jobIds = readdirSync(storageRoot);
+      assert.equal(jobIds.length, 1);
+      assert.equal(
+        readFileSync(
+          path.join(storageRoot, jobIds[0], 'workspace', 'input.txt'),
+          'utf8',
+        ),
+        'downloaded before run',
+      );
+
+      return {} as NodeJS.Immediate;
+    }) as typeof setImmediate;
+
+    const fileFetch = (async (url: string) => {
+      assert.equal(url, 'https://files.example.test/input.txt');
+      return new Response('downloaded before run', {
+        status: 200,
+        headers: { 'content-length': '21' },
+      });
+    }) as typeof fetch;
+
+    const service = new JobsService(logsStore, storageRoot, scheduler, fileFetch);
+    const response = await service.createJob({
+      commands: ['cat input.txt'],
+      openaiFileIdRefs: [
+        {
+          name: '../input.txt',
+          download_url: 'https://files.example.test/input.txt',
+        },
+      ],
+    });
+
+    assert.equal(scheduled, true);
+    assert.match(response.job_id, /^[0-9a-f-]{36}$/i);
+  });
+
+  test('does not schedule the job when ChatGPT file download fails', async () => {
+    const logsStore = {
+      append: async () => undefined,
+      tail: async () => '',
+      deleteByJobId: async () => undefined,
+      recent: async () => [],
+      onModuleInit: async () => undefined,
+      onModuleDestroy: async () => undefined,
+    } as unknown as JobLogsStore;
+
+    let scheduled = false;
+    const scheduler = ((callback: (...args: any[]) => void) => {
+      void callback;
+      scheduled = true;
+      return {} as NodeJS.Immediate;
+    }) as typeof setImmediate;
+    const fileFetch = (async () =>
+      new Response('missing', { status: 404 })) as typeof fetch;
+
+    const service = new JobsService(logsStore, storageRoot, scheduler, fileFetch);
+
+    await assert.rejects(
+      () =>
+        service.createJob({
+          commands: ['cat input.txt'],
+          openaiFileIdRefs: [
+            {
+              name: 'input.txt',
+              download_url: 'https://files.example.test/input.txt',
+            },
+          ],
+        }),
+      BadRequestException,
+    );
+    assert.equal(scheduled, false);
   });
 });
 
@@ -442,7 +600,7 @@ describe('JobsService.uploadFile', () => {
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  test('stores uploads inside the local storage workspace', () => {
+  test('stores uploads inside the local storage workspace', async () => {
     const logsStore = {
       append: async () => undefined,
       tail: async () => '',
@@ -453,7 +611,7 @@ describe('JobsService.uploadFile', () => {
     } as unknown as JobLogsStore;
 
     const service = new JobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = service.createJob({
+    const { job_id } = await service.createJob({
       commands: ['python3 --version'],
     });
 
@@ -503,7 +661,7 @@ describe('JobsService.listArtifacts', () => {
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  test('returns absolute download URLs from the request origin', () => {
+  test('returns absolute download URLs from the request origin', async () => {
     const logsStore = {
       append: async () => undefined,
       tail: async () => '',
@@ -514,7 +672,7 @@ describe('JobsService.listArtifacts', () => {
     } as unknown as JobLogsStore;
 
     const service = new JobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = service.createJob({
+    const { job_id } = await service.createJob({
       commands: ['python3 --version'],
     });
 
@@ -552,7 +710,7 @@ describe('JobsService.listArtifacts', () => {
     );
   });
 
-  test('uses PUBLIC_BASE_URL before the request origin for artifact URLs', () => {
+  test('uses PUBLIC_BASE_URL before the request origin for artifact URLs', async () => {
     const previousPublicBaseUrl = process.env.PUBLIC_BASE_URL;
     process.env.PUBLIC_BASE_URL = 'https://public.example.test/';
 
@@ -567,7 +725,7 @@ describe('JobsService.listArtifacts', () => {
       } as unknown as JobLogsStore;
 
       const service = new JobsService(logsStore, storageRoot, noopScheduler);
-      const { job_id } = service.createJob({
+      const { job_id } = await service.createJob({
         commands: ['python3 --version'],
       });
 
@@ -594,7 +752,89 @@ describe('JobsService.listArtifacts', () => {
     }
   });
 
-  test('rejects missing or mismatched artifact signatures', () => {
+  test('returns a downloadable image URL for a SpriteFusion pixel snapper output', async () => {
+    const logsStore = {
+      append: async () => undefined,
+      tail: async () => '',
+      deleteByJobId: async () => undefined,
+      recent: async () => [],
+      onModuleInit: async () => undefined,
+      onModuleDestroy: async () => undefined,
+    } as unknown as JobLogsStore;
+
+    const dto: CreateJobDto = {
+      repo_url: 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
+      commands: [
+        [
+          'convert',
+          '-size 16x16 xc:none',
+          '-fill "#d33b32" -draw "rectangle 0,0 7,7"',
+          '-fill "#d8443a" -draw "rectangle 8,0 15,7"',
+          '-fill "#315bd8" -draw "rectangle 0,8 7,15"',
+          '-fill "#3b64df" -draw "rectangle 8,8 15,15"',
+          'mixed-pixel-art.png',
+        ].join(' '),
+        'cargo run --release -- mixed-pixel-art.png /artifacts/spritefusion-pixel-snapped.png 4 --pixel-size 8',
+      ],
+    };
+
+    const service = new JobsService(logsStore, storageRoot, noopScheduler);
+    const script = (service as unknown as {
+      safeScript(dto: CreateJobDto): string;
+    }).safeScript(dto);
+
+    assert.match(
+      script,
+      /git clone 'https:\/\/github\.com\/Hugo-Dz\/spritefusion-pixel-snapper\.git' repo/,
+    );
+    assert.match(script, /convert .*mixed-pixel-art\.png/);
+    assert.match(
+      script,
+      /cargo run --release -- mixed-pixel-art\.png \/artifacts\/spritefusion-pixel-snapped\.png 4 --pixel-size 8/,
+    );
+
+    const { job_id } = await service.createJob(dto);
+    const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
+    const outputImage = path.join(artifactsDir, 'spritefusion-pixel-snapped.png');
+    writeFileSync(
+      outputImage,
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lB9LwQAAAABJRU5ErkJggg==',
+        'base64',
+      ),
+    );
+
+    const response = service.listArtifacts(job_id, 'https://api.example.test');
+
+    assert.equal(response.artifacts.length, 1);
+    assert.equal(
+      response.artifacts[0].name,
+      'spritefusion-pixel-snapped.png',
+    );
+    assert.equal(response.artifacts[0].size_bytes, statSync(outputImage).size);
+
+    const downloadUrl = new URL(response.artifacts[0].download_url);
+    assert.equal(
+      downloadUrl.origin + downloadUrl.pathname,
+      `https://api.example.test/jobs/${job_id}/artifact`,
+    );
+    assert.equal(
+      downloadUrl.searchParams.get('path'),
+      'spritefusion-pixel-snapped.png',
+    );
+    assert.match(downloadUrl.searchParams.get('signature') || '', /^[0-9a-f]{64}$/);
+
+    const file = service.getArtifactFile(
+      job_id,
+      'spritefusion-pixel-snapped.png',
+      downloadUrl.searchParams.get('signature') || '',
+    );
+
+    assert.equal(file.absolutePath, outputImage);
+    assert.equal(file.filename, 'spritefusion-pixel-snapped.png');
+  });
+
+  test('rejects missing or mismatched artifact signatures', async () => {
     const logsStore = {
       append: async () => undefined,
       tail: async () => '',
@@ -605,10 +845,10 @@ describe('JobsService.listArtifacts', () => {
     } as unknown as JobLogsStore;
 
     const service = new JobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = service.createJob({
+    const { job_id } = await service.createJob({
       commands: ['python3 --version'],
     });
-    const otherJob = service.createJob({
+    const otherJob = await service.createJob({
       commands: ['node --version'],
     });
 
@@ -640,7 +880,7 @@ describe('JobsService.listArtifacts', () => {
     );
   });
 
-  test('requires PUBLIC_ARTIFACT_SECRET to generate artifact URLs', () => {
+  test('requires PUBLIC_ARTIFACT_SECRET to generate artifact URLs', async () => {
     delete process.env.PUBLIC_ARTIFACT_SECRET;
 
     const logsStore = {
@@ -653,7 +893,7 @@ describe('JobsService.listArtifacts', () => {
     } as unknown as JobLogsStore;
 
     const service = new JobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = service.createJob({
+    const { job_id } = await service.createJob({
       commands: ['python3 --version'],
     });
 
