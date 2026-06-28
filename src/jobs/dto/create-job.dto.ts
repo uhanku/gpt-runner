@@ -16,6 +16,49 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+function normalizeOpenAiFileRefs(value: unknown) {
+  const normalize = (items: unknown) => {
+    if (!Array.isArray(items)) {
+      return items;
+    }
+
+    return items.map((item) => {
+      if (
+        item &&
+        typeof item === 'object' &&
+        !('download_url' in item) &&
+        'download_link' in item
+      ) {
+        return {
+          ...item,
+          download_url: (item as { download_link?: unknown }).download_link,
+        };
+      }
+
+      return item;
+    });
+  };
+
+  if (Array.isArray(value)) {
+    return normalize(value);
+  }
+
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return value;
+  }
+
+  try {
+    return normalize(JSON.parse(trimmed));
+  } catch {
+    return value;
+  }
+}
+
 export class ChatGptFileReferenceDto {
   @ApiProperty({
     description: 'Filename to stage into the job workspace.',
@@ -44,7 +87,9 @@ export class ChatGptFileReferenceDto {
   download_link?: string;
 }
 
-export class CreateJobDto {
+export class CreateJobDto {}
+
+export class StartJobDto {
   @ApiPropertyOptional({
     description: 'Optional git repository URL to clone before running commands.',
     example: 'https://github.com/pallets/flask.git',
@@ -97,61 +142,6 @@ export class CreateJobDto {
   commands!: string[];
 
   @ApiPropertyOptional({
-    description:
-      'ChatGPT Action file references to download into /workspace before the job starts.',
-    type: [ChatGptFileReferenceDto],
-    maxItems: 10,
-  })
-  @IsOptional()
-  @Transform(({ value }) => {
-    const normalize = (items: unknown) => {
-      if (!Array.isArray(items)) {
-        return items;
-      }
-
-      return items.map((item) => {
-        if (
-          item &&
-          typeof item === 'object' &&
-          !('download_url' in item) &&
-          'download_link' in item
-        ) {
-          return {
-            ...item,
-            download_url: (item as { download_link?: unknown }).download_link,
-          };
-        }
-
-        return item;
-      });
-    };
-
-    if (Array.isArray(value)) {
-      return normalize(value);
-    }
-
-    if (typeof value !== 'string') {
-      return value;
-    }
-
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return value;
-    }
-
-    try {
-      return normalize(JSON.parse(trimmed));
-    } catch {
-      return value;
-    }
-  })
-  @IsArray()
-  @ArrayMaxSize(10)
-  @ValidateNested({ each: true })
-  @Type(() => ChatGptFileReferenceDto)
-  openaiFileIdRefs?: ChatGptFileReferenceDto[];
-
-  @ApiPropertyOptional({
     description: 'Maximum runtime in seconds.',
     default: 300,
     maximum: 900,
@@ -191,4 +181,20 @@ export class CreateJobDto {
   })
   @IsBoolean()
   root?: boolean = false;
+}
+
+export class UploadJobFilesDto {
+  @ApiPropertyOptional({
+    description:
+      'ChatGPT Action file reference to download into /workspace/input.png.',
+    type: [ChatGptFileReferenceDto],
+    maxItems: 1,
+  })
+  @IsOptional()
+  @Transform(({ value }) => normalizeOpenAiFileRefs(value))
+  @IsArray()
+  @ArrayMaxSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => ChatGptFileReferenceDto)
+  openaiFileIdRefs?: ChatGptFileReferenceDto[];
 }

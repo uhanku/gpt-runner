@@ -8,12 +8,11 @@ import {
   Query,
   Req,
   Res,
-  UploadedFile,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -24,7 +23,7 @@ import {
 import type { Request, Response } from 'express';
 import type {} from 'multer';
 import { BearerAuthGuard } from './bearer-auth.guard';
-import { CreateJobDto } from './dto/create-job.dto';
+import { CreateJobDto, StartJobDto, UploadJobFilesDto } from './dto/create-job.dto';
 import { JobsService } from './jobs.service';
 import { PublicRoute } from './public-route.decorator';
 
@@ -36,78 +35,17 @@ export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 
   @Post()
-  @ApiConsumes('application/json', 'multipart/form-data')
   @ApiBody({
     schema: {
       type: 'object',
-      properties: {
-        repo_url: { type: 'string' },
-        branch: { type: 'string' },
-        commands: {
-          oneOf: [
-            {
-              type: 'array',
-              items: { type: 'string' },
-            },
-            {
-              type: 'string',
-              description: 'JSON string array for multipart clients.',
-            },
-          ],
-          description:
-            'Shell commands. For multipart requests, send repeated commands fields or a JSON string array.',
-        },
-        timeout_seconds: { type: 'integer', default: 300, maximum: 900 },
-        network: { type: 'string', enum: ['on', 'off'], default: 'on' },
-        root: { type: 'boolean', default: false },
-        openaiFileIdRefs: {
-          type: 'array',
-          maxItems: 10,
-          items: {
-            type: 'object',
-            properties: {
-              name: { type: 'string' },
-              download_url: { type: 'string', format: 'uri' },
-              download_link: {
-                type: 'string',
-                format: 'uri',
-                description: 'Alias for download_url.',
-              },
-            },
-            required: ['name'],
-            anyOf: [
-              { required: ['download_url'] },
-              { required: ['download_link'] },
-            ],
-          },
-          description:
-            'ChatGPT Action file references to download into /workspace before the job starts.',
-        },
-        files: {
-          type: 'array',
-          items: {
-            type: 'string',
-            format: 'binary',
-          },
-          maxItems: 10,
-        },
-      },
-      required: ['commands'],
+      properties: {},
     },
   })
-  @UseInterceptors(
-    FilesInterceptor('files', 10, {
-      limits: {
-        fileSize: 50 * 1024 * 1024,
-      },
-    }),
-  )
   async createJob(
-    @Body() dto: CreateJobDto,
-    @UploadedFiles() files: Express.Multer.File[] = [],
+    @Body() _dto: CreateJobDto,
     @Req() request: Request,
   ) {
-    return this.jobsService.createJob(dto, files, this.requestOrigin(request));
+    return this.jobsService.createJob(this.requestOrigin(request));
   }
 
   @Get()
@@ -140,7 +78,7 @@ export class JobsController {
   }
 
   @Post(':jobId/files')
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json', 'multipart/form-data')
   @ApiBody({
     schema: {
       type: 'object',
@@ -149,22 +87,90 @@ export class JobsController {
           type: 'string',
           format: 'binary',
         },
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+          maxItems: 1,
+        },
+        openaiFileIdRefs: {
+          type: 'array',
+          maxItems: 1,
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              download_url: { type: 'string', format: 'uri' },
+              download_link: {
+                type: 'string',
+                format: 'uri',
+                description: 'Alias for download_url.',
+              },
+            },
+            required: ['name'],
+            anyOf: [
+              { required: ['download_url'] },
+              { required: ['download_link'] },
+            ],
+          },
+        },
       },
-      required: ['file'],
     },
   })
   @UseInterceptors(
-    FileInterceptor('file', {
+    AnyFilesInterceptor({
       limits: {
         fileSize: 50 * 1024 * 1024,
       },
     }),
   )
-  uploadFile(
+  uploadFiles(
     @Param('jobId') jobId: string,
-    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: UploadJobFilesDto,
+    @UploadedFiles() files: Express.Multer.File[] = [],
   ) {
-    return this.jobsService.uploadFile(jobId, file);
+    return this.jobsService.uploadFile(jobId, dto, files);
+  }
+
+  @Post(':jobId/start')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        repo_url: { type: 'string' },
+        branch: { type: 'string' },
+        commands: {
+          oneOf: [
+            {
+              type: 'array',
+              items: { type: 'string' },
+            },
+            {
+              type: 'string',
+              description: 'JSON string array for multipart clients.',
+            },
+          ],
+          description: 'Shell commands to run inside the container.',
+        },
+        timeout_seconds: { type: 'integer', default: 300, maximum: 900 },
+        network: { type: 'string', enum: ['on', 'off'], default: 'on' },
+        root: { type: 'boolean', default: false },
+      },
+      required: ['commands'],
+    },
+  })
+  startJob(
+    @Param('jobId') jobId: string,
+    @Body() dto: StartJobDto,
+    @Req() request: Request,
+  ) {
+    return this.jobsService.startJob(
+      jobId,
+      dto,
+      this.requestOrigin(request),
+    );
   }
 
   @Get(':jobId/artifacts')

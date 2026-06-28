@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   InternalServerErrorException,
   Injectable,
@@ -21,7 +22,11 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
-import { CreateJobDto } from './dto/create-job.dto';
+import {
+  ChatGptFileReferenceDto,
+  StartJobDto,
+  UploadJobFilesDto,
+} from './dto/create-job.dto';
 import { JobLogsStore, RecentJobLogEntry } from './job-logs.store';
 
 export const JOB_STORAGE_ROOT = 'JOB_STORAGE_ROOT';
@@ -82,11 +87,7 @@ export class JobsService {
     mkdirSync(this.appRoot, { recursive: true });
   }
 
-  async createJob(
-    dto: CreateJobDto,
-    files: Express.Multer.File[] = [],
-    fallbackBaseUrl?: string,
-  ) {
+  async createJob(fallbackBaseUrl?: string) {
     const jobId = randomUUID();
     const baseUrl = this.publicBaseUrl(fallbackBaseUrl);
 
@@ -102,22 +103,7 @@ export class JobsService {
 
     this.writeStatus(jobId, status);
 
-    for (const file of files) {
-      this.storeWorkspaceFile(jobId, file);
-    }
-
-    await this.storeChatGptFileReferences(jobId, dto);
-
-    this.scheduleImmediate(() => {
-      this.runJob(jobId, dto);
-    });
-
-    return {
-      job_id: jobId,
-      status: 'queued',
-      status_url: this.absoluteUrl(baseUrl, `/jobs/${jobId}`),
-      artifacts_url: this.absoluteUrl(baseUrl, `/jobs/${jobId}/artifacts`),
-    };
+    return this.jobEnvelope(jobId, 'queued', baseUrl);
   }
 
   async getJob(jobId: string) {
@@ -174,19 +160,64 @@ export class JobsService {
     return this.jobLogsStore.recent(limit);
   }
 
-  uploadFile(jobId: string, file: Express.Multer.File) {
-    this.readStatus(jobId);
+  startJob(jobId: string, dto: StartJobDto, fallbackBaseUrl?: string) {
+    const status = this.readStatus(jobId);
+    if (status.status === 'running') {
+      throw new ConflictException('Job is already running');
+    }
 
-    if (!file) {
+    status.status = 'running';
+    status.return_code = null;
+    status.updated_at = this.nowIso();
+    this.writeStatus(jobId, status);
+
+    this.scheduleImmediate(() => {
+      this.runJob(jobId, dto);
+    });
+
+    return this.jobEnvelope(
+      jobId,
+      'running',
+      this.publicBaseUrl(fallbackBaseUrl),
+    );
+  }
+
+  async uploadFile(
+    jobId: string,
+    dto: UploadJobFilesDto,
+    files: Express.Multer.File[] = [],
+  ) {
+    const status = this.readStatus(jobId);
+    if (status.status === 'running') {
+      throw new ConflictException('Cannot upload files while the job is running');
+    }
+
+    const refs = dto.openaiFileIdRefs ?? [];
+    const inputCount = files.length + refs.length;
+    if (inputCount === 0) {
       throw new BadRequestException('Missing file');
     }
 
-    const filename = this.storeWorkspaceFile(jobId, file);
+    if (inputCount > 1) {
+      throw new BadRequestException('Only one input image is allowed');
+    }
+
+    let buffer = files[0]?.buffer;
+    if (!buffer) {
+      const fileRef = refs[0];
+      if (!fileRef) {
+        throw new BadRequestException('Missing file');
+      }
+
+      buffer = await this.fetchReferencedFile(fileRef);
+    }
+
+    this.storeInputImage(jobId, buffer);
 
     return {
       job_id: jobId,
-      filename,
-      path_inside_container: `/workspace/${filename}`,
+      filename: 'input.png',
+      path_inside_container: '/workspace/input.png',
     };
   }
 
@@ -260,7 +291,7 @@ export class JobsService {
     };
   }
 
-  private runJob(jobId: string, dto: CreateJobDto) {
+  private runJob(jobId: string, dto: StartJobDto) {
     const timeoutSeconds = dto.timeout_seconds ?? 300;
     const network = dto.network ?? 'on';
     const root = dto.root ?? false;
@@ -372,7 +403,7 @@ export class JobsService {
     });
   }
 
-  private safeScript(dto: CreateJobDto): string {
+  private safeScript(dto: StartJobDto): string {
     const lines = [
       'set -euo pipefail',
       'cd /workspace',
@@ -451,69 +482,56 @@ export class JobsService {
     }).unref();
   }
 
-  private storeWorkspaceFile(jobId: string, file: Express.Multer.File) {
-    if (!file) {
-      throw new BadRequestException('Missing file');
+  private async fetchReferencedFile(fileRef: ChatGptFileReferenceDto) {
+    const downloadUrl = fileRef.download_url ?? fileRef.download_link;
+    if (!downloadUrl) {
+      throw new BadRequestException(
+        `Missing download URL for referenced file: ${fileRef.name}`,
+      );
     }
 
-    return this.storeWorkspaceBuffer(
-      jobId,
-      file.originalname || 'upload.bin',
-      file.buffer,
-    );
+    const response = await this.fileFetch(downloadUrl);
+
+    if (!response.ok) {
+      throw new BadRequestException(
+        `Failed to download referenced file: ${fileRef.name}`,
+      );
+    }
+
+    const contentLength = response.headers.get('content-length');
+    if (
+      contentLength &&
+      Number.isFinite(Number(contentLength)) &&
+      Number(contentLength) > MAX_WORKSPACE_FILE_BYTES
+    ) {
+      throw new BadRequestException(
+        `Referenced file is too large: ${fileRef.name}`,
+      );
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.byteLength > MAX_WORKSPACE_FILE_BYTES) {
+      throw new BadRequestException(
+        `Referenced file is too large: ${fileRef.name}`,
+      );
+    }
+
+    return buffer;
   }
 
-  private async storeChatGptFileReferences(jobId: string, dto: CreateJobDto) {
-    for (const fileRef of dto.openaiFileIdRefs ?? []) {
-      const downloadUrl = fileRef.download_url ?? fileRef.download_link;
-      if (!downloadUrl) {
-        throw new BadRequestException(
-          `Missing download URL for referenced file: ${fileRef.name}`,
-        );
-      }
-
-      const response = await this.fileFetch(downloadUrl);
-
-      if (!response.ok) {
-        throw new BadRequestException(
-          `Failed to download referenced file: ${fileRef.name}`,
-        );
-      }
-
-      const contentLength = response.headers.get('content-length');
-      if (
-        contentLength &&
-        Number.isFinite(Number(contentLength)) &&
-        Number(contentLength) > MAX_WORKSPACE_FILE_BYTES
-      ) {
-        throw new BadRequestException(
-          `Referenced file is too large: ${fileRef.name}`,
-        );
-      }
-
-      const buffer = Buffer.from(await response.arrayBuffer());
-      if (buffer.byteLength > MAX_WORKSPACE_FILE_BYTES) {
-        throw new BadRequestException(
-          `Referenced file is too large: ${fileRef.name}`,
-        );
-      }
-
-      this.storeWorkspaceBuffer(jobId, fileRef.name, buffer);
-    }
-  }
-
-  private storeWorkspaceBuffer(jobId: string, originalName: string, buffer: Buffer) {
-    const filename = path.basename(originalName || 'upload.bin');
-    if (!filename || filename === '.' || filename === '..') {
-      throw new BadRequestException('Invalid file name');
-    }
-
-    const destination = path.join(this.workspaceDir(jobId), filename);
-
+  private storeInputImage(jobId: string, buffer: Buffer) {
+    const destination = path.join(this.workspaceDir(jobId), 'input.png');
     writeFileSync(destination, buffer);
     chmodSync(destination, 0o666);
+  }
 
-    return filename;
+  private jobEnvelope(jobId: string, status: JobState, baseUrl: string) {
+    return {
+      job_id: jobId,
+      status,
+      status_url: this.absoluteUrl(baseUrl, `/jobs/${jobId}`),
+      artifacts_url: this.absoluteUrl(baseUrl, `/jobs/${jobId}/artifacts`),
+    };
   }
 
   private ensureJobDirs(jobId: string) {
