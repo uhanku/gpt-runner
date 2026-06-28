@@ -72,8 +72,13 @@ export class JobsService {
     mkdirSync(this.appRoot, { recursive: true });
   }
 
-  createJob(dto: CreateJobDto, files: Express.Multer.File[] = []) {
+  createJob(
+    dto: CreateJobDto,
+    files: Express.Multer.File[] = [],
+    fallbackBaseUrl?: string,
+  ) {
     const jobId = randomUUID();
+    const baseUrl = this.publicBaseUrl(fallbackBaseUrl);
 
     this.ensureJobDirs(jobId);
 
@@ -98,8 +103,8 @@ export class JobsService {
     return {
       job_id: jobId,
       status: 'queued',
-      status_url: `/jobs/${jobId}`,
-      artifacts_url: `/jobs/${jobId}/artifacts`,
+      status_url: this.absoluteUrl(baseUrl, `/jobs/${jobId}`),
+      artifacts_url: this.absoluteUrl(baseUrl, `/jobs/${jobId}/artifacts`),
     };
   }
 
@@ -173,16 +178,21 @@ export class JobsService {
     };
   }
 
-  listArtifacts(jobId: string) {
+  listArtifacts(jobId: string, fallbackBaseUrl?: string) {
     this.readStatus(jobId);
 
+    const baseUrl = this.publicBaseUrl(fallbackBaseUrl);
     const base = this.artifactsDir(jobId);
     const files = this.walkFiles(base).map((absolutePath) => {
       const rel = path.relative(base, absolutePath).replaceAll(path.sep, '/');
+      const downloadPath = `/jobs/${jobId}/artifact?path=${encodeURIComponent(
+        rel,
+      )}`;
+
       return {
         name: rel,
         size_bytes: statSync(absolutePath).size,
-        download_url: `/jobs/${jobId}/artifact?path=${encodeURIComponent(rel)}`,
+        download_url: this.absoluteUrl(baseUrl, downloadPath),
       };
     });
 
@@ -502,6 +512,17 @@ export class JobsService {
 
   private nowIso(): string {
     return new Date().toISOString();
+  }
+
+  private publicBaseUrl(fallbackBaseUrl?: string): string {
+    return (process.env.PUBLIC_BASE_URL || fallbackBaseUrl || '').replace(
+      /\/+$/,
+      '',
+    );
+  }
+
+  private absoluteUrl(baseUrl: string, pathAndQuery: string): string {
+    return baseUrl ? `${baseUrl}${pathAndQuery}` : pathAndQuery;
   }
 
   private jobDir(jobId: string): string {

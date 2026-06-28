@@ -185,14 +185,24 @@ describe('JobsService.createJob', () => {
     } as unknown as JobLogsStore;
 
     const service = new JobsService(logsStore, storageRoot, noopScheduler);
-    const response = service.createJob({
-      commands: ['python3 --version'],
-    });
+    const response = service.createJob(
+      {
+        commands: ['python3 --version'],
+      },
+      [],
+      'https://api.example.test',
+    );
 
     assert.match(response.job_id, /^[0-9a-f-]{36}$/i);
     assert.equal(response.status, 'queued');
-    assert.equal(response.status_url, `/jobs/${response.job_id}`);
-    assert.equal(response.artifacts_url, `/jobs/${response.job_id}/artifacts`);
+    assert.equal(
+      response.status_url,
+      `https://api.example.test/jobs/${response.job_id}`,
+    );
+    assert.equal(
+      response.artifacts_url,
+      `https://api.example.test/jobs/${response.job_id}/artifacts`,
+    );
 
     const statusFile = path.join(storageRoot, response.job_id, 'status.json');
 
@@ -224,6 +234,46 @@ describe('JobsService.createJob', () => {
       assert.equal(existsSync(path.join(ignoredRoot, response.job_id)), false);
     } finally {
       delete process.env.GPT_API_ROOT;
+    }
+  });
+
+  test('uses PUBLIC_BASE_URL before the request origin for response URLs', () => {
+    const previousPublicBaseUrl = process.env.PUBLIC_BASE_URL;
+    process.env.PUBLIC_BASE_URL = 'https://public.example.test/';
+
+    try {
+      const logsStore = {
+        append: async () => undefined,
+        tail: async () => '',
+        deleteByJobId: async () => undefined,
+        recent: async () => [],
+        onModuleInit: async () => undefined,
+        onModuleDestroy: async () => undefined,
+      } as unknown as JobLogsStore;
+
+      const service = new JobsService(logsStore, storageRoot, noopScheduler);
+      const response = service.createJob(
+        {
+          commands: ['python3 --version'],
+        },
+        [],
+        'https://request.example.test',
+      );
+
+      assert.equal(
+        response.status_url,
+        `https://public.example.test/jobs/${response.job_id}`,
+      );
+      assert.equal(
+        response.artifacts_url,
+        `https://public.example.test/jobs/${response.job_id}/artifacts`,
+      );
+    } finally {
+      if (previousPublicBaseUrl === undefined) {
+        delete process.env.PUBLIC_BASE_URL;
+      } else {
+        process.env.PUBLIC_BASE_URL = previousPublicBaseUrl;
+      }
     }
   });
 
@@ -417,6 +467,103 @@ describe('JobsService.uploadFile', () => {
     assert.equal(response.filename, 'report.txt');
     assert.equal(response.path_inside_container, '/workspace/report.txt');
     assert.equal(readFileSync(storedFile, 'utf8'), 'hello world');
+  });
+});
+
+describe('JobsService.listArtifacts', () => {
+  const noopScheduler = (() => {
+    return ((callback: (...args: any[]) => void) => {
+      void callback;
+      return {} as NodeJS.Immediate;
+    }) as typeof setImmediate;
+  })();
+  let tempRoot: string;
+  let storageRoot: string;
+
+  beforeEach(() => {
+    tempRoot = mkdtempSync(path.join(tmpdir(), 'gpt-runner-artifacts-'));
+    storageRoot = path.join(tempRoot, 'storage');
+  });
+
+  afterEach(() => {
+    rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  test('returns absolute download URLs from the request origin', () => {
+    const logsStore = {
+      append: async () => undefined,
+      tail: async () => '',
+      deleteByJobId: async () => undefined,
+      recent: async () => [],
+      onModuleInit: async () => undefined,
+      onModuleDestroy: async () => undefined,
+    } as unknown as JobLogsStore;
+
+    const service = new JobsService(logsStore, storageRoot, noopScheduler);
+    const { job_id } = service.createJob({
+      commands: ['python3 --version'],
+    });
+
+    const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
+    mkdirSync(path.join(artifactsDir, 'nested'), { recursive: true });
+    writeFileSync(
+      path.join(artifactsDir, 'nested', 'report one.txt'),
+      'download me',
+      'utf8',
+    );
+
+    const response = service.listArtifacts(job_id, 'https://api.example.test/');
+
+    assert.deepEqual(response, {
+      job_id,
+      artifacts: [
+        {
+          name: 'nested/report one.txt',
+          size_bytes: 11,
+          download_url: `https://api.example.test/jobs/${job_id}/artifact?path=nested%2Freport%20one.txt`,
+        },
+      ],
+    });
+  });
+
+  test('uses PUBLIC_BASE_URL before the request origin for artifact URLs', () => {
+    const previousPublicBaseUrl = process.env.PUBLIC_BASE_URL;
+    process.env.PUBLIC_BASE_URL = 'https://public.example.test/';
+
+    try {
+      const logsStore = {
+        append: async () => undefined,
+        tail: async () => '',
+        deleteByJobId: async () => undefined,
+        recent: async () => [],
+        onModuleInit: async () => undefined,
+        onModuleDestroy: async () => undefined,
+      } as unknown as JobLogsStore;
+
+      const service = new JobsService(logsStore, storageRoot, noopScheduler);
+      const { job_id } = service.createJob({
+        commands: ['python3 --version'],
+      });
+
+      const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
+      writeFileSync(path.join(artifactsDir, 'report.txt'), 'ok', 'utf8');
+
+      const response = service.listArtifacts(
+        job_id,
+        'https://request.example.test',
+      );
+
+      assert.equal(
+        response.artifacts[0].download_url,
+        `https://public.example.test/jobs/${job_id}/artifact?path=report.txt`,
+      );
+    } finally {
+      if (previousPublicBaseUrl === undefined) {
+        delete process.env.PUBLIC_BASE_URL;
+      } else {
+        process.env.PUBLIC_BASE_URL = previousPublicBaseUrl;
+      }
+    }
   });
 });
 

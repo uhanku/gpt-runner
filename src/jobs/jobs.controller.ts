@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Query,
+  Req,
   Res,
   UploadedFile,
   UploadedFiles,
@@ -20,7 +21,7 @@ import {
   ApiOkResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import type {} from 'multer';
 import { BearerAuthGuard } from './bearer-auth.guard';
 import { CreateJobDto } from './dto/create-job.dto';
@@ -80,8 +81,9 @@ export class JobsController {
   createJob(
     @Body() dto: CreateJobDto,
     @UploadedFiles() files: Express.Multer.File[] = [],
+    @Req() request: Request,
   ) {
-    return this.jobsService.createJob(dto, files);
+    return this.jobsService.createJob(dto, files, this.requestOrigin(request));
   }
 
   @Get()
@@ -142,8 +144,8 @@ export class JobsController {
   }
 
   @Get(':jobId/artifacts')
-  listArtifacts(@Param('jobId') jobId: string) {
-    return this.jobsService.listArtifacts(jobId);
+  listArtifacts(@Param('jobId') jobId: string, @Req() request: Request) {
+    return this.jobsService.listArtifacts(jobId, this.requestOrigin(request));
   }
 
   @Get(':jobId/artifact')
@@ -159,5 +161,13 @@ export class JobsController {
   @Delete(':jobId')
   deleteJob(@Param('jobId') jobId: string) {
     return this.jobsService.deleteJob(jobId);
+  }
+
+  private requestOrigin(request: Request): string {
+    const forwardedProto = request.get('x-forwarded-proto')?.split(',')[0].trim();
+    const proto = forwardedProto || request.protocol;
+    const host = request.get('host');
+
+    return host ? `${proto}://${host}` : '';
   }
 }
