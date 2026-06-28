@@ -72,7 +72,7 @@ export class JobsService {
     mkdirSync(this.appRoot, { recursive: true });
   }
 
-  createJob(dto: CreateJobDto) {
+  createJob(dto: CreateJobDto, files: Express.Multer.File[] = []) {
     const jobId = randomUUID();
 
     this.ensureJobDirs(jobId);
@@ -86,6 +86,10 @@ export class JobsService {
     };
 
     this.writeStatus(jobId, status);
+
+    for (const file of files) {
+      this.storeWorkspaceFile(jobId, file);
+    }
 
     this.scheduleImmediate(() => {
       this.runJob(jobId, dto);
@@ -160,11 +164,7 @@ export class JobsService {
       throw new BadRequestException('Missing file');
     }
 
-    const filename = path.basename(file.originalname || 'upload.bin');
-    const destination = path.join(this.workspaceDir(jobId), filename);
-
-    writeFileSync(destination, file.buffer);
-    chmodSync(destination, 0o666);
+    const filename = this.storeWorkspaceFile(jobId, file);
 
     return {
       job_id: jobId,
@@ -422,6 +422,24 @@ export class JobsService {
       stdio: 'ignore',
       detached: true,
     }).unref();
+  }
+
+  private storeWorkspaceFile(jobId: string, file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('Missing file');
+    }
+
+    const filename = path.basename(file.originalname || 'upload.bin');
+    if (!filename || filename === '.' || filename === '..') {
+      throw new BadRequestException('Invalid file name');
+    }
+
+    const destination = path.join(this.workspaceDir(jobId), filename);
+
+    writeFileSync(destination, file.buffer);
+    chmodSync(destination, 0o666);
+
+    return filename;
   }
 
   private ensureJobDirs(jobId: string) {

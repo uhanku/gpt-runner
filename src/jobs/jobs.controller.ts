@@ -8,10 +8,11 @@ import {
   Query,
   Res,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -33,8 +34,54 @@ export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 
   @Post()
-  createJob(@Body() dto: CreateJobDto) {
-    return this.jobsService.createJob(dto);
+  @ApiConsumes('application/json', 'multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        repo_url: { type: 'string' },
+        branch: { type: 'string' },
+        commands: {
+          oneOf: [
+            {
+              type: 'array',
+              items: { type: 'string' },
+            },
+            {
+              type: 'string',
+              description: 'JSON string array for multipart clients.',
+            },
+          ],
+          description:
+            'Shell commands. For multipart requests, send repeated commands fields or a JSON string array.',
+        },
+        timeout_seconds: { type: 'integer', default: 300, maximum: 900 },
+        network: { type: 'string', enum: ['on', 'off'], default: 'on' },
+        root: { type: 'boolean', default: false },
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+          maxItems: 10,
+        },
+      },
+      required: ['commands'],
+    },
+  })
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      limits: {
+        fileSize: 50 * 1024 * 1024,
+      },
+    }),
+  )
+  createJob(
+    @Body() dto: CreateJobDto,
+    @UploadedFiles() files: Express.Multer.File[] = [],
+  ) {
+    return this.jobsService.createJob(dto, files);
   }
 
   @Get()

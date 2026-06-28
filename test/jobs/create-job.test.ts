@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -60,6 +61,57 @@ describe('CreateJobDto', () => {
     assert.equal(result.timeout_seconds, 120);
     assert.equal(result.network, 'off');
     assert.equal(result.root, true);
+  });
+
+  test('coerces multipart-style boolean fields predictably', async () => {
+    const result = await pipe.transform(
+      {
+        commands: ['python3 --version'],
+        root: 'false',
+      },
+      {
+        type: 'body',
+        metatype: CreateJobDto,
+      } as never,
+    );
+
+    assert.equal(result.root, false);
+  });
+
+  test('accepts multipart-style commands fields', async () => {
+    const repeated = await pipe.transform(
+      {
+        commands: ['python3 --version', 'pytest'],
+      },
+      {
+        type: 'body',
+        metatype: CreateJobDto,
+      } as never,
+    );
+
+    const jsonString = await pipe.transform(
+      {
+        commands: '["python3 --version","pytest"]',
+      },
+      {
+        type: 'body',
+        metatype: CreateJobDto,
+      } as never,
+    );
+
+    const single = await pipe.transform(
+      {
+        commands: 'python3 --version',
+      },
+      {
+        type: 'body',
+        metatype: CreateJobDto,
+      } as never,
+    );
+
+    assert.deepEqual(repeated.commands, ['python3 --version', 'pytest']);
+    assert.deepEqual(jsonString.commands, ['python3 --version', 'pytest']);
+    assert.deepEqual(single.commands, ['python3 --version']);
   });
 
   test('rejects invalid payloads', async () => {
@@ -173,6 +225,51 @@ describe('JobsService.createJob', () => {
     } finally {
       delete process.env.GPT_API_ROOT;
     }
+  });
+
+  test('stores create-time uploads before scheduling the job', () => {
+    const logsStore = {
+      append: async () => undefined,
+      tail: async () => '',
+      deleteByJobId: async () => undefined,
+      recent: async () => [],
+      onModuleInit: async () => undefined,
+      onModuleDestroy: async () => undefined,
+    } as unknown as JobLogsStore;
+
+    let scheduled = false;
+    const scheduler = ((callback: (...args: any[]) => void) => {
+      void callback;
+      scheduled = true;
+
+      const jobIds = readdirSync(storageRoot);
+      assert.equal(jobIds.length, 1);
+      assert.equal(
+        readFileSync(
+          path.join(storageRoot, jobIds[0], 'workspace', 'input.txt'),
+          'utf8',
+        ),
+        'uploaded before run',
+      );
+
+      return {} as NodeJS.Immediate;
+    }) as typeof setImmediate;
+
+    const service = new JobsService(logsStore, storageRoot, scheduler);
+    const response = service.createJob(
+      {
+        commands: ['cat input.txt'],
+      },
+      [
+        {
+          originalname: '../input.txt',
+          buffer: Buffer.from('uploaded before run'),
+        } as Express.Multer.File,
+      ],
+    );
+
+    assert.equal(scheduled, true);
+    assert.match(response.job_id, /^[0-9a-f-]{36}$/i);
   });
 });
 
