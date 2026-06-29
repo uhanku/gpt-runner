@@ -16,7 +16,6 @@ import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
-  ApiConsumes,
   ApiOkResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -79,66 +78,26 @@ export class JobsController {
   }
 
   @Post(':jobId/files')
-  @ApiConsumes('application/json', 'multipart/form-data')
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        file: {
-          oneOf: [
-            {
-              type: 'string',
-              format: 'binary',
-              description: 'Multipart file upload.',
-            },
-            {
-              type: 'string',
-              description:
-                'ChatGPT Action file URL/reference to download into /workspace/input.png. Supports https://, file-service://, and sediment://.',
-            },
-          ],
-        },
         filename: {
           type: 'string',
           description:
-            'Optional source filename for the file string fallback. Defaults to input.png.',
-        },
-        files: {
-          type: 'array',
-          items: {
-            type: 'string',
-            format: 'binary',
-          },
-          maxItems: 1,
+            'Optional destination filename for the uploaded file string. Defaults to input.png.',
         },
         openaiFileIdRefs: {
           type: 'array',
           maxItems: 1,
+          description:
+            'The array where ChatGPT injects file reference strings including the secure, 5-minute transient download_link.',
           items: {
-            type: 'object',
-            properties: {
-              name: { type: 'string' },
-              download_url: {
-                type: 'string',
-                format: 'uri',
-                description:
-                  'Supports https://, file-service://, and sediment://.',
-              },
-              download_link: {
-                type: 'string',
-                format: 'uri',
-                description:
-                  'Alias for download_url. Supports https://, file-service://, and sediment://.',
-              },
-            },
-            required: ['name'],
-            anyOf: [
-              { required: ['download_url'] },
-              { required: ['download_link'] },
-            ],
+            type: 'string',
           },
         },
       },
+      required: ['openaiFileIdRefs'],
     },
   })
   @UseInterceptors(

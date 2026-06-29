@@ -23,7 +23,6 @@ import {
 import path from 'node:path';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
-  ChatGptFileReferenceDto,
   StartJobDto,
   UploadJobFilesDto,
 } from './dto/create-job.dto';
@@ -61,6 +60,12 @@ export interface JobSummary {
 }
 
 type FileFetch = typeof fetch;
+
+interface ReferencedFile {
+  name: string;
+  download_url?: string;
+  download_link?: string;
+}
 
 @Injectable()
 export class JobsService {
@@ -192,7 +197,10 @@ export class JobsService {
       throw new ConflictException('Cannot upload files while the job is running');
     }
 
-    const refs = [...(dto.openaiFileIdRefs ?? [])];
+    const refs: ReferencedFile[] = (dto.openaiFileIdRefs ?? []).map((ref) => ({
+      name: dto.filename ?? 'input.png',
+      download_url: ref,
+    }));
 
     if (files.length === 0 && refs.length === 0 && dto.file) {
       refs.push({
@@ -490,7 +498,7 @@ export class JobsService {
     }).unref();
   }
 
-  private async fetchReferencedFile(fileRef: ChatGptFileReferenceDto) {
+  private async fetchReferencedFile(fileRef: ReferencedFile) {
     const downloadUrl = fileRef.download_url ?? fileRef.download_link;
     if (!downloadUrl) {
       throw new BadRequestException(

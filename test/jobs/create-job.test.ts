@@ -191,15 +191,10 @@ describe('UploadJobFilesDto', () => {
     whitelist: true,
   });
 
-  test('accepts ChatGPT file references in the validated payload', async () => {
+  test('accepts ChatGPT file reference strings in the validated payload', async () => {
     const result = await pipe.transform(
       {
-        openaiFileIdRefs: [
-          {
-            name: '../input.png',
-            download_link: 'file-service://files/input.png',
-          },
-        ],
+        openaiFileIdRefs: ['file-service://files/input.png'],
       },
       {
         type: 'body',
@@ -207,11 +202,7 @@ describe('UploadJobFilesDto', () => {
       } as never,
     );
 
-    assert.equal(result.openaiFileIdRefs?.[0].name, '../input.png');
-    assert.equal(
-      result.openaiFileIdRefs?.[0].download_link,
-      'file-service://files/input.png',
-    );
+    assert.equal(result.openaiFileIdRefs?.[0], 'file-service://files/input.png');
   });
 
   test('accepts a simple file string fallback in the validated payload', async () => {
@@ -230,7 +221,7 @@ describe('UploadJobFilesDto', () => {
     assert.equal(result.filename, 'source.png');
   });
 
-  test('rejects invalid ChatGPT file references', async () => {
+  test('rejects invalid ChatGPT file reference payloads', async () => {
     const cases = [
       {
         openaiFileIdRefs: [{ download_url: 'https://files.example.test/a' }],
@@ -239,20 +230,12 @@ describe('UploadJobFilesDto', () => {
         openaiFileIdRefs: [{ name: 'input.png' }],
       },
       {
-        openaiFileIdRefs: [
-          { name: 'input.png', download_url: 'http://files.example.test/a' },
-        ],
+        openaiFileIdRefs: [123],
       },
       {
         openaiFileIdRefs: [
-          {
-            name: 'input-1.png',
-            download_url: 'https://files.example.test/1',
-          },
-          {
-            name: 'input-2.png',
-            download_url: 'https://files.example.test/2',
-          },
+          'https://files.example.test/1',
+          'https://files.example.test/2',
         ],
       },
     ];
@@ -706,12 +689,8 @@ describe('JobsService.uploadFile', () => {
     const { job_id } = await service.createJob();
 
     const response = await service.uploadFile(job_id, {
-      openaiFileIdRefs: [
-        {
-          name: '../ignored-name.png',
-          download_url: 'https://files.example.test/input.png',
-        },
-      ],
+      openaiFileIdRefs: ['https://files.example.test/input.png'],
+      filename: '../ignored-name.png',
     });
 
     const storedFile = path.join(
@@ -792,12 +771,7 @@ describe('JobsService.uploadFile', () => {
         service.uploadFile(
           job_id,
           {
-            openaiFileIdRefs: [
-              {
-                name: 'input.png',
-                download_url: 'https://files.example.test/input.png',
-              },
-            ],
+            openaiFileIdRefs: ['https://files.example.test/input.png'],
           },
           [
             {
@@ -833,12 +807,7 @@ describe('JobsService.uploadFile', () => {
     await assert.rejects(
       () =>
         failedService.uploadFile(failedJob.job_id, {
-          openaiFileIdRefs: [
-            {
-              name: 'input.png',
-              download_url: 'https://files.example.test/missing.png',
-            },
-          ],
+          openaiFileIdRefs: ['https://files.example.test/missing.png'],
         }),
       BadRequestException,
     );
@@ -859,12 +828,7 @@ describe('JobsService.uploadFile', () => {
     await assert.rejects(
       () =>
         oversizedService.uploadFile(oversizedJob.job_id, {
-          openaiFileIdRefs: [
-            {
-              name: 'input.png',
-              download_url: 'https://files.example.test/large.png',
-            },
-          ],
+          openaiFileIdRefs: ['https://files.example.test/large.png'],
         }),
       BadRequestException,
     );
