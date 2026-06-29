@@ -197,7 +197,7 @@ describe('UploadJobFilesDto', () => {
         openaiFileIdRefs: [
           {
             name: '../input.png',
-            download_link: 'https://files.example.test/input.png',
+            download_link: 'file-service://files/input.png',
           },
         ],
       },
@@ -210,8 +210,24 @@ describe('UploadJobFilesDto', () => {
     assert.equal(result.openaiFileIdRefs?.[0].name, '../input.png');
     assert.equal(
       result.openaiFileIdRefs?.[0].download_link,
-      'https://files.example.test/input.png',
+      'file-service://files/input.png',
     );
+  });
+
+  test('accepts a simple file string fallback in the validated payload', async () => {
+    const result = await pipe.transform(
+      {
+        file: 'sediment://files/input.png',
+        filename: 'source.png',
+      },
+      {
+        type: 'body',
+        metatype: UploadJobFilesDto,
+      } as never,
+    );
+
+    assert.equal(result.file, 'sediment://files/input.png');
+    assert.equal(result.filename, 'source.png');
   });
 
   test('rejects invalid ChatGPT file references', async () => {
@@ -708,6 +724,49 @@ describe('JobsService.uploadFile', () => {
     assert.equal(response.filename, 'input.png');
     assert.equal(response.path_inside_container, '/workspace/input.png');
     assert.equal(readFileSync(storedFile, 'utf8'), 'downloaded input');
+  });
+
+  test('stores the simple file string fallback as input.png', async () => {
+    const logsStore = {
+      append: async () => undefined,
+      tail: async () => '',
+      deleteByJobId: async () => undefined,
+      recent: async () => [],
+      onModuleInit: async () => undefined,
+      onModuleDestroy: async () => undefined,
+    } as unknown as JobLogsStore;
+
+    const fileFetch = (async (url: string) => {
+      assert.equal(url, 'sediment://files/input.png');
+      return new Response('fallback input', {
+        status: 200,
+        headers: { 'content-length': '14' },
+      });
+    }) as typeof fetch;
+
+    const service = new JobsService(
+      logsStore,
+      storageRoot,
+      noopScheduler,
+      fileFetch,
+    );
+    const { job_id } = await service.createJob();
+
+    const response = await service.uploadFile(job_id, {
+      file: 'sediment://files/input.png',
+      filename: 'source.png',
+    });
+
+    const storedFile = path.join(
+      storageRoot,
+      job_id,
+      'workspace',
+      'input.png',
+    );
+
+    assert.equal(response.filename, 'input.png');
+    assert.equal(response.path_inside_container, '/workspace/input.png');
+    assert.equal(readFileSync(storedFile, 'utf8'), 'fallback input');
   });
 
   test('rejects missing and multiple file inputs', async () => {

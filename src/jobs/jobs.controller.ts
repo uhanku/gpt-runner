@@ -84,8 +84,23 @@ export class JobsController {
       type: 'object',
       properties: {
         file: {
+          oneOf: [
+            {
+              type: 'string',
+              format: 'binary',
+              description: 'Multipart file upload.',
+            },
+            {
+              type: 'string',
+              description:
+                'ChatGPT Action file URL/reference to download into /workspace/input.png. Supports https://, file-service://, and sediment://.',
+            },
+          ],
+        },
+        filename: {
           type: 'string',
-          format: 'binary',
+          description:
+            'Optional source filename for the file string fallback. Defaults to input.png.',
         },
         files: {
           type: 'array',
@@ -102,11 +117,17 @@ export class JobsController {
             type: 'object',
             properties: {
               name: { type: 'string' },
-              download_url: { type: 'string', format: 'uri' },
+              download_url: {
+                type: 'string',
+                format: 'uri',
+                description:
+                  'Supports https://, file-service://, and sediment://.',
+              },
               download_link: {
                 type: 'string',
                 format: 'uri',
-                description: 'Alias for download_url.',
+                description:
+                  'Alias for download_url. Supports https://, file-service://, and sediment://.',
               },
             },
             required: ['name'],

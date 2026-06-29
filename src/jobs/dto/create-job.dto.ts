@@ -16,6 +16,8 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+const CHATGPT_FILE_URL_PROTOCOLS = ['https', 'file-service', 'sediment'];
+
 function normalizeOpenAiFileRefs(value: unknown) {
   const normalize = (items: unknown) => {
     if (!Array.isArray(items)) {
@@ -75,7 +77,11 @@ export class ChatGptFileReferenceDto {
     (object: ChatGptFileReferenceDto) =>
       object.download_link === undefined || object.download_url !== undefined,
   )
-  @IsUrl({ protocols: ['https'], require_protocol: true })
+  @IsUrl({
+    protocols: CHATGPT_FILE_URL_PROTOCOLS,
+    require_protocol: true,
+    require_tld: false,
+  })
   download_url?: string;
 
   @ApiPropertyOptional({
@@ -83,7 +89,11 @@ export class ChatGptFileReferenceDto {
     example: 'https://example.test/files/input.csv',
   })
   @ValidateIf((object: ChatGptFileReferenceDto) => object.download_link !== undefined)
-  @IsUrl({ protocols: ['https'], require_protocol: true })
+  @IsUrl({
+    protocols: CHATGPT_FILE_URL_PROTOCOLS,
+    require_protocol: true,
+    require_tld: false,
+  })
   download_link?: string;
 }
 
@@ -184,6 +194,14 @@ export class StartJobDto {
 }
 
 export class UploadJobFilesDto {
+  @IsOptional()
+  @IsString()
+  file?: string;
+
+  @IsOptional()
+  @IsString()
+  filename?: string;
+
   @ApiPropertyOptional({
     description:
       'ChatGPT Action file reference to download into /workspace/input.png.',

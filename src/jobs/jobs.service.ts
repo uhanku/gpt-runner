@@ -192,7 +192,15 @@ export class JobsService {
       throw new ConflictException('Cannot upload files while the job is running');
     }
 
-    const refs = dto.openaiFileIdRefs ?? [];
+    const refs = [...(dto.openaiFileIdRefs ?? [])];
+
+    if (files.length === 0 && refs.length === 0 && dto.file) {
+      refs.push({
+        name: dto.filename ?? 'input.png',
+        download_url: dto.file,
+      });
+    }
+
     const inputCount = files.length + refs.length;
     if (inputCount === 0) {
       throw new BadRequestException('Missing file');
