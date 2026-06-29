@@ -26,6 +26,7 @@ import { BearerAuthGuard } from './bearer-auth.guard';
 import { CreateJobDto, StartJobDto, UploadJobFilesDto } from './dto/create-job.dto';
 import { JobsService } from './jobs.service';
 import { PublicRoute } from './public-route.decorator';
+import { UploadRequestBodyLoggerInterceptor } from './upload-request-body-logger.interceptor';
 
 @ApiTags('jobs')
 @ApiBearerAuth('bearer')
@@ -146,6 +147,7 @@ export class JobsController {
         fileSize: 50 * 1024 * 1024,
       },
     }),
+    UploadRequestBodyLoggerInterceptor,
   )
   uploadFiles(
     @Param('jobId') jobId: string,
