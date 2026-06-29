@@ -7,7 +7,8 @@
     "build": "nest build",
     "start": "node dist/main.js",
     "dev": "nest start --watch",
-    "test": "node -r ts-node/register --test test/**/*.test.ts"
+    "test": "node -r ts-node/register --test test/**/*.test.ts",
+    "test:spritefusion-workflow": "node -r ts-node/register --test test/**/*.integration.ts"
   },
   "repository": {
     "type": "git",
