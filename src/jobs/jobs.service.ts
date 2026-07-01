@@ -42,12 +42,18 @@ type JobState =
   | 'timeout'
   | 'deleted';
 
+export interface JobSpec {
+  goal: string;
+  repo_url: string;
+}
+
 interface JobStatus {
   job_id: string;
   status: JobState;
   created_at: string;
   updated_at: string;
   return_code: number | null;
+  job?: JobSpec;
   logs_tail?: string;
 }
 
@@ -57,6 +63,7 @@ export interface JobSummary {
   created_at: string;
   updated_at: string;
   return_code: number | null;
+  job?: JobSpec;
 }
 
 type FileFetch = typeof fetch;
@@ -92,7 +99,7 @@ export class JobsService {
     mkdirSync(this.appRoot, { recursive: true });
   }
 
-  async createJob(fallbackBaseUrl?: string) {
+  async createJob(job?: JobSpec, fallbackBaseUrl?: string) {
     const jobId = randomUUID();
     const baseUrl = this.publicBaseUrl(fallbackBaseUrl);
 
@@ -104,11 +111,12 @@ export class JobsService {
       created_at: this.nowIso(),
       updated_at: this.nowIso(),
       return_code: null,
+      job,
     };
 
     this.writeStatus(jobId, status);
 
-    return this.jobEnvelope(jobId, 'queued', baseUrl);
+    return this.jobEnvelope(jobId, 'queued', baseUrl, job);
   }
 
   async getJob(jobId: string) {
@@ -146,6 +154,7 @@ export class JobsService {
           created_at: status.created_at,
           updated_at: status.updated_at,
           return_code: status.return_code,
+          ...(status.job ? { job: status.job } : {}),
         });
       } catch {
         continue;
@@ -159,6 +168,10 @@ export class JobsService {
     });
 
     return jobs;
+  }
+
+  listQueuedJobs(): JobSummary[] {
+    return this.listJobs().filter((job) => job.status === 'queued');
   }
 
   async getRecentLogs(limit = 50): Promise<RecentJobLogEntry[]> {
@@ -184,6 +197,7 @@ export class JobsService {
       jobId,
       'running',
       this.publicBaseUrl(fallbackBaseUrl),
+      status.job,
     );
   }
 
@@ -541,10 +555,16 @@ export class JobsService {
     chmodSync(destination, 0o666);
   }
 
-  private jobEnvelope(jobId: string, status: JobState, baseUrl: string) {
+  private jobEnvelope(
+    jobId: string,
+    status: JobState,
+    baseUrl: string,
+    job?: JobSpec,
+  ) {
     return {
       job_id: jobId,
       status,
+      ...(job ? { job } : {}),
       status_url: this.absoluteUrl(baseUrl, `/jobs/${jobId}`),
       artifacts_url: this.absoluteUrl(baseUrl, `/jobs/${jobId}/artifacts`),
     };

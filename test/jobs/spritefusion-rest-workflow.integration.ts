@@ -12,6 +12,10 @@ import { JobLogsStore } from '../../src/jobs/job-logs.store';
 interface JobEnvelope {
   job_id: string;
   status: 'queued' | 'running' | 'success' | 'failed' | 'timeout' | 'deleted';
+  job?: {
+    goal: string;
+    repo_url: string;
+  };
   status_url: string;
   artifacts_url: string;
 }
@@ -19,6 +23,10 @@ interface JobEnvelope {
 interface JobStatus {
   job_id: string;
   status: 'queued' | 'running' | 'success' | 'failed' | 'timeout' | 'deleted';
+  job?: {
+    goal: string;
+    repo_url: string;
+  };
   return_code: number | null;
   logs_tail?: string;
 }
@@ -112,12 +120,21 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
         ...authHeaders(),
         'content-type': 'application/json',
       },
-      body: '{}',
+      body: JSON.stringify({
+        job: {
+          goal: 'Run the SpriteFusion pixel snapper workflow.',
+          repo_url: 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
+        },
+      }),
     });
 
     jobId = created.job_id;
     assert.match(created.job_id, /^[0-9a-f-]{36}$/i);
     assert.equal(created.status, 'queued');
+    assert.deepEqual(created.job, {
+      goal: 'Run the SpriteFusion pixel snapper workflow.',
+      repo_url: 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
+    });
     assert.equal(created.status_url, `${baseUrl}/jobs/${created.job_id}`);
     assert.equal(
       created.artifacts_url,

@@ -22,7 +22,11 @@ import {
 import type { Request, Response } from 'express';
 import type {} from 'multer';
 import { BearerAuthGuard } from './bearer-auth.guard';
-import { CreateJobDto, StartJobDto, UploadJobFilesDto } from './dto/create-job.dto';
+import {
+  CreateJobDto,
+  StartJobDto,
+  UploadJobFilesDto,
+} from './dto/create-job.dto';
 import { JobsService } from './jobs.service';
 import { PublicRoute } from './public-route.decorator';
 import { UploadRequestBodyLoggerInterceptor } from './upload-request-body-logger.interceptor';
@@ -38,14 +42,30 @@ export class JobsController {
   @ApiBody({
     schema: {
       type: 'object',
-      properties: {},
+      properties: {
+        job: {
+          type: 'object',
+          properties: {
+            goal: {
+              type: 'string',
+              description: 'The goal of the job.',
+            },
+            repo_url: {
+              type: 'string',
+              description: 'The repository URL for the job.',
+            },
+          },
+          required: ['goal', 'repo_url'],
+        },
+      },
+      required: ['job'],
     },
   })
   async createJob(
-    @Body() _dto: CreateJobDto,
+    @Body() dto: CreateJobDto,
     @Req() request: Request,
   ) {
-    return this.jobsService.createJob(this.requestOrigin(request));
+    return this.jobsService.createJob(dto.job, this.requestOrigin(request));
   }
 
   @Get()
@@ -55,6 +75,14 @@ export class JobsController {
       items: {
         type: 'object',
         properties: {
+          job: {
+            type: 'object',
+            nullable: true,
+            properties: {
+              goal: { type: 'string' },
+              repo_url: { type: 'string' },
+            },
+          },
           job_id: { type: 'string' },
           status: {
             type: 'string',
@@ -70,6 +98,38 @@ export class JobsController {
   })
   listJobs() {
     return this.jobsService.listJobs();
+  }
+
+  @Get('queued')
+  @ApiOkResponse({
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          job: {
+            type: 'object',
+            nullable: true,
+            properties: {
+              goal: { type: 'string' },
+              repo_url: { type: 'string' },
+            },
+          },
+          job_id: { type: 'string' },
+          status: {
+            type: 'string',
+            enum: ['queued', 'running', 'success', 'failed', 'timeout', 'deleted'],
+          },
+          created_at: { type: 'string', format: 'date-time' },
+          updated_at: { type: 'string', format: 'date-time' },
+          return_code: { type: 'integer', nullable: true },
+        },
+        required: ['job_id', 'status', 'created_at', 'updated_at', 'return_code'],
+      },
+    },
+  })
+  listQueuedJobs() {
+    return this.jobsService.listQueuedJobs();
   }
 
   @Get(':jobId')

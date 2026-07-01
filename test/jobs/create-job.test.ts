@@ -35,9 +35,14 @@ describe('CreateJobDto', () => {
     whitelist: true,
   });
 
-  test('accepts an empty create-job payload', async () => {
+  test('accepts the nested job payload', async () => {
     const result = await pipe.transform(
-      {},
+      {
+        job: {
+          goal: 'Run the repository tests and summarize failures.',
+          repo_url: 'https://github.com/pallets/flask.git',
+        },
+      },
       {
         type: 'body',
         metatype: CreateJobDto,
@@ -45,6 +50,37 @@ describe('CreateJobDto', () => {
     );
 
     assert.ok(result instanceof CreateJobDto);
+    assert.equal(
+      result.job.goal,
+      'Run the repository tests and summarize failures.',
+    );
+    assert.equal(result.job.repo_url, 'https://github.com/pallets/flask.git');
+  });
+
+  test('rejects empty and incomplete create-job payloads', async () => {
+    const cases = [
+      { payload: {}, message: 'job should be required' },
+      {
+        payload: { job: { goal: 'Run tests' } },
+        message: 'repo_url should be required inside job',
+      },
+      {
+        payload: { job: { repo_url: 'https://github.com/pallets/flask.git' } },
+        message: 'goal should be required inside job',
+      },
+    ];
+
+    for (const { payload, message } of cases) {
+      await assert.rejects(
+        () =>
+          pipe.transform(payload, {
+            type: 'body',
+            metatype: CreateJobDto,
+          } as never),
+        BadRequestException,
+        message,
+      );
+    }
   });
 });
 
@@ -285,10 +321,20 @@ describe('JobsService.createJob', () => {
     } as unknown as JobLogsStore;
 
     const service = new JobsService(logsStore, storageRoot, noopScheduler);
-    const response = await service.createJob('https://api.example.test');
+    const response = await service.createJob(
+      {
+        goal: 'Run the repository test suite.',
+        repo_url: 'https://github.com/pallets/flask.git',
+      },
+      'https://api.example.test',
+    );
 
     assert.match(response.job_id, /^[0-9a-f-]{36}$/i);
     assert.equal(response.status, 'queued');
+    assert.deepEqual(response.job, {
+      goal: 'Run the repository test suite.',
+      repo_url: 'https://github.com/pallets/flask.git',
+    });
     assert.equal(
       response.status_url,
       `https://api.example.test/jobs/${response.job_id}`,
@@ -301,6 +347,42 @@ describe('JobsService.createJob', () => {
     const statusFile = path.join(storageRoot, response.job_id, 'status.json');
 
     assert.ok(existsSync(statusFile));
+    assert.deepEqual(
+      JSON.parse(readFileSync(statusFile, 'utf8')).job,
+      {
+        goal: 'Run the repository test suite.',
+        repo_url: 'https://github.com/pallets/flask.git',
+      },
+    );
+  });
+
+  test('persists create-job metadata to status.json', async () => {
+    const logsStore = {
+      append: async () => undefined,
+      tail: async () => '',
+      deleteByJobId: async () => undefined,
+      recent: async () => [],
+      onModuleInit: async () => undefined,
+      onModuleDestroy: async () => undefined,
+    } as unknown as JobLogsStore;
+
+    const service = new JobsService(logsStore, storageRoot, noopScheduler);
+    const response = await service.createJob(
+      {
+        goal: 'Collect logs for the failing build.',
+        repo_url: 'https://github.com/pallets/flask.git',
+      },
+      'https://api.example.test',
+    );
+
+    const status = JSON.parse(
+      readFileSync(path.join(storageRoot, response.job_id, 'status.json'), 'utf8'),
+    );
+
+    assert.deepEqual(status.job, {
+      goal: 'Collect logs for the failing build.',
+      repo_url: 'https://github.com/pallets/flask.git',
+    });
   });
 
   test('keeps host-created files under local storage even when GPT_API_ROOT is set', async () => {
@@ -344,7 +426,10 @@ describe('JobsService.createJob', () => {
       } as unknown as JobLogsStore;
 
       const service = new JobsService(logsStore, storageRoot, noopScheduler);
-      const response = await service.createJob('https://request.example.test');
+      const response = await service.createJob(
+        undefined,
+        'https://request.example.test',
+      );
 
       assert.equal(
         response.status_url,
@@ -442,6 +527,37 @@ describe('JobsService.startJob', () => {
     );
     assert.equal(status.status, 'running');
     assert.equal(status.return_code, null);
+  });
+
+  test('keeps stored job metadata in the start response', async () => {
+    const logsStore = {
+      append: async () => undefined,
+      tail: async () => '',
+      deleteByJobId: async () => undefined,
+      recent: async () => [],
+      onModuleInit: async () => undefined,
+      onModuleDestroy: async () => undefined,
+    } as unknown as JobLogsStore;
+
+    const scheduler = ((callback: (...args: any[]) => void) => {
+      void callback;
+      return {} as NodeJS.Immediate;
+    }) as typeof setImmediate;
+
+    const service = new JobsService(logsStore, storageRoot, scheduler);
+    const created = await service.createJob({
+      goal: 'Run the repository tests after cloning the repo.',
+      repo_url: 'https://github.com/pallets/flask.git',
+    });
+
+    const response = service.startJob(created.job_id, {
+      commands: ['python3 --version'],
+    });
+
+    assert.deepEqual(response.job, {
+      goal: 'Run the repository tests after cloning the repo.',
+      repo_url: 'https://github.com/pallets/flask.git',
+    });
   });
 
   test('allows repeated starts after terminal statuses', async () => {
@@ -1146,6 +1262,30 @@ describe('Swagger docs', () => {
       commands: ['ls -la'],
     });
   });
+
+  test('documents the queued jobs list route', async () => {
+    const metadata = Reflect.getMetadata(
+      'swagger/apiResponse',
+      JobsController.prototype.listQueuedJobs,
+    ) as Record<string, { schema?: { type?: string; items?: { properties?: Record<string, unknown> } } }>;
+
+    const okResponse = metadata['200'];
+
+    assert.ok(okResponse);
+    assert.equal(okResponse.schema?.type, 'array');
+    assert.equal(
+      (okResponse.schema?.items?.properties?.status as { type?: string } | undefined)?.type,
+      'string',
+    );
+    assert.deepEqual(
+      (okResponse.schema?.items?.properties?.status as { enum?: string[] } | undefined)?.enum,
+      ['queued', 'running', 'success', 'failed', 'timeout', 'deleted'],
+    );
+    assert.deepEqual(
+      Reflect.getMetadata('path', JobsController.prototype.listQueuedJobs),
+      'queued',
+    );
+  });
 });
 
 describe('JobsService.listJobs', () => {
@@ -1188,6 +1328,10 @@ describe('JobsService.listJobs', () => {
       JSON.stringify(
         {
           job_id: 'job-older',
+          job: {
+            goal: 'Inspect the older job.',
+            repo_url: 'https://github.com/example/older.git',
+          },
           status: 'success',
           created_at: '2026-01-01T10:00:00.000Z',
           updated_at: '2026-01-01T10:05:00.000Z',
@@ -1204,6 +1348,10 @@ describe('JobsService.listJobs', () => {
       JSON.stringify(
         {
           job_id: 'job-newer',
+          job: {
+            goal: 'Inspect the newer job.',
+            repo_url: 'https://github.com/example/newer.git',
+          },
           status: 'running',
           created_at: '2026-01-02T10:00:00.000Z',
           updated_at: '2026-01-02T10:30:00.000Z',
@@ -1220,6 +1368,10 @@ describe('JobsService.listJobs', () => {
     assert.deepEqual(jobs, [
       {
         job_id: 'job-newer',
+        job: {
+          goal: 'Inspect the newer job.',
+          repo_url: 'https://github.com/example/newer.git',
+        },
         status: 'running',
         created_at: '2026-01-02T10:00:00.000Z',
         updated_at: '2026-01-02T10:30:00.000Z',
@@ -1227,10 +1379,102 @@ describe('JobsService.listJobs', () => {
       },
       {
         job_id: 'job-older',
+        job: {
+          goal: 'Inspect the older job.',
+          repo_url: 'https://github.com/example/older.git',
+        },
         status: 'success',
         created_at: '2026-01-01T10:00:00.000Z',
         updated_at: '2026-01-01T10:05:00.000Z',
         return_code: 0,
+      },
+    ]);
+  });
+});
+
+describe('JobsService.listQueuedJobs', () => {
+  let tempRoot: string;
+  let storageRoot: string;
+
+  beforeEach(() => {
+    tempRoot = mkdtempSync(path.join(tmpdir(), 'gpt-runner-queued-jobs-'));
+    storageRoot = path.join(tempRoot, 'storage');
+    rmSync(storageRoot, { recursive: true, force: true });
+  });
+
+  afterEach(() => {
+    rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  test('returns only jobs that are still queued', () => {
+    const logsStore = {
+      append: async () => undefined,
+      tail: async () => '',
+      deleteByJobId: async () => undefined,
+      recent: async () => [],
+      onModuleInit: async () => undefined,
+      onModuleDestroy: async () => undefined,
+    } as unknown as JobLogsStore;
+
+    const service = new JobsService(logsStore, storageRoot);
+
+    const queuedJob = path.join(storageRoot, 'job-queued');
+    const runningJob = path.join(storageRoot, 'job-running');
+
+    mkdirSync(queuedJob, { recursive: true });
+    mkdirSync(runningJob, { recursive: true });
+
+    writeFileSync(
+      path.join(queuedJob, 'status.json'),
+      JSON.stringify(
+        {
+          job_id: 'job-queued',
+          job: {
+            goal: 'Queue the job for later execution.',
+            repo_url: 'https://github.com/example/queued.git',
+          },
+          status: 'queued',
+          created_at: '2026-01-03T10:00:00.000Z',
+          updated_at: '2026-01-03T10:00:00.000Z',
+          return_code: null,
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    );
+
+    writeFileSync(
+      path.join(runningJob, 'status.json'),
+      JSON.stringify(
+        {
+          job_id: 'job-running',
+          job: {
+            goal: 'The running job should be filtered out.',
+            repo_url: 'https://github.com/example/running.git',
+          },
+          status: 'running',
+          created_at: '2026-01-03T11:00:00.000Z',
+          updated_at: '2026-01-03T11:10:00.000Z',
+          return_code: null,
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    );
+
+    assert.deepEqual(service.listQueuedJobs(), [
+      {
+        job_id: 'job-queued',
+        job: {
+          goal: 'Queue the job for later execution.',
+          repo_url: 'https://github.com/example/queued.git',
+        },
+        status: 'queued',
+        created_at: '2026-01-03T10:00:00.000Z',
+        updated_at: '2026-01-03T10:00:00.000Z',
+        return_code: null,
       },
     ]);
   });

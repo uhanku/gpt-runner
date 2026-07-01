@@ -4,12 +4,14 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
+  IsDefined,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
   Max,
   Min,
+  ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -34,7 +36,32 @@ function normalizeOpenAiFileRefs(value: unknown) {
   }
 }
 
-export class CreateJobDto {}
+export class CreateJobJobDto {
+  @ApiProperty({
+    description: 'The goal of the job.',
+    example: 'Run the repository test suite and report failures.',
+  })
+  @IsString()
+  goal!: string;
+
+  @ApiProperty({
+    description: 'The repository URL for the job.',
+    example: 'https://github.com/pallets/flask.git',
+  })
+  @IsString()
+  repo_url!: string;
+}
+
+export class CreateJobDto {
+  @ApiProperty({
+    description: 'Stored job metadata for the queued job.',
+    type: () => CreateJobJobDto,
+  })
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => CreateJobJobDto)
+  job!: CreateJobJobDto;
+}
 
 export class StartJobDto {
   @ApiPropertyOptional({
