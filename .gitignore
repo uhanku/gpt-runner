@@ -80,8 +80,8 @@ docker-compose.override.yml
 # Misc
 *.tgz
 
-COMMANDS.md
-
 .codex
 .agents
 storage/
+
+COMMANDS.md
