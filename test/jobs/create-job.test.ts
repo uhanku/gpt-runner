@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import {
   existsSync,
@@ -19,6 +20,7 @@ import {
   UnauthorizedException,
   ValidationPipe,
 } from '@nestjs/common';
+import { JobsController } from '../../src/jobs/jobs.controller';
 import {
   CreateJobDto,
   StartJobDto,
@@ -1126,6 +1128,23 @@ describe('JobsService.listArtifacts', () => {
       () => service.listArtifacts(job_id, 'https://api.example.test'),
       InternalServerErrorException,
     );
+  });
+});
+
+describe('Swagger docs', () => {
+  test('prefills the SpriteFusion repo workflow on the start-job request body', async () => {
+    const metadata = Reflect.getMetadata(
+      'swagger/apiParameters',
+      JobsController.prototype.startJob,
+    ) as Array<{ in?: string; schema?: { example?: unknown } }>;
+
+    const bodyMetadata = metadata?.find((entry) => entry.in === 'body');
+
+    assert.ok(bodyMetadata);
+    assert.deepEqual(bodyMetadata?.schema?.example, {
+      repo_url: 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
+      commands: ['ls -la'],
+    });
   });
 });
 

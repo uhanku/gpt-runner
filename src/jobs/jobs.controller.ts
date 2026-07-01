@@ -120,6 +120,10 @@ export class JobsController {
   @ApiBody({
     schema: {
       type: 'object',
+      example: {
+        repo_url: 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
+        commands: ['ls -la'],
+      },
       properties: {
         repo_url: { type: 'string' },
         branch: { type: 'string' },
