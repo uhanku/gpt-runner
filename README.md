@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/icon.png" alt="GPT Runner icon" width="160" style="border-radius: 25%;" />
+  <img src="public/icon.png" alt="GPT Runner icon" width="160" />
 </p>
 
 # GPT Runner
