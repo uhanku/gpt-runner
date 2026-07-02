@@ -12,5 +12,6 @@
     "outDir": "./dist",
     "strict": true,
     "skipLibCheck": true
-  }
+  },
+  "include": ["src/**/*.ts"]
 }
