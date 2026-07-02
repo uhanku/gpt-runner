@@ -2,6 +2,8 @@
   <img src="public/icon.png" alt="GPT Runner icon" width="160" />
 </p>
 
+<p align="center"><strong>GPT Runner</strong></p>
+
 # GPT Runner
 
 <p align="center">
