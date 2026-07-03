@@ -4,8 +4,6 @@
 
 <p align="center"><strong>GPT Runner</strong></p>
 
-# GPT Runner
-
 <p align="center">
   <img alt="NestJS" src="https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />

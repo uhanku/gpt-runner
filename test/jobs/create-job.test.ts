@@ -240,7 +240,60 @@ describe('UploadJobFilesDto', () => {
       } as never,
     );
 
-    assert.equal(result.openaiFileIdRefs?.[0], 'file-service://files/input.png');
+    const firstRef = result.openaiFileIdRefs?.[0] as
+      | {
+          name?: string;
+          download_url?: string;
+          download_link?: string;
+        }
+      | undefined;
+
+    assert.equal(
+      firstRef?.download_url,
+      'file-service://files/input.png',
+    );
+    assert.equal(firstRef?.download_link, 'file-service://files/input.png');
+    assert.equal(firstRef?.name, 'input.png');
+  });
+
+  test('accepts ChatGPT file reference objects in the validated payload', async () => {
+    const result = await pipe.transform(
+      {
+        openaiFileIdRefs: [
+          {
+            name: 'feef984b-2531-4ac6-a4c6-d8eb45097a4f.png',
+            id: 'file_00000000fddc72438aa508d29872311d',
+            mime_type: 'image/png',
+            download_link: 'https://files.example.test/a',
+          },
+        ],
+      },
+      {
+        type: 'body',
+        metatype: UploadJobFilesDto,
+      } as never,
+    );
+
+    const firstRef = result.openaiFileIdRefs?.[0] as
+      | {
+          name?: string;
+          id?: string;
+          mime_type?: string;
+          download_url?: string;
+          download_link?: string;
+        }
+      | undefined;
+
+    assert.equal(
+      firstRef?.name,
+      'feef984b-2531-4ac6-a4c6-d8eb45097a4f.png',
+    );
+    assert.equal(
+      firstRef?.download_link,
+      'https://files.example.test/a',
+    );
+    assert.equal(firstRef?.id, 'file_00000000fddc72438aa508d29872311d');
+    assert.equal(firstRef?.mime_type, 'image/png');
   });
 
   test('accepts a simple file string fallback in the validated payload', async () => {
@@ -263,9 +316,6 @@ describe('UploadJobFilesDto', () => {
     const cases = [
       {
         openaiFileIdRefs: [{ download_url: 'https://files.example.test/a' }],
-      },
-      {
-        openaiFileIdRefs: [{ name: 'input.png' }],
       },
       {
         openaiFileIdRefs: [123],
@@ -821,6 +871,56 @@ describe('JobsService.uploadFile', () => {
     assert.equal(response.filename, 'input.png');
     assert.equal(response.path_inside_container, '/workspace/input.png');
     assert.equal(readFileSync(storedFile, 'utf8'), 'downloaded input');
+  });
+
+  test('stores ChatGPT file reference objects as input.png', async () => {
+    const logsStore = {
+      append: async () => undefined,
+      tail: async () => '',
+      deleteByJobId: async () => undefined,
+      recent: async () => [],
+      onModuleInit: async () => undefined,
+      onModuleDestroy: async () => undefined,
+    } as unknown as JobLogsStore;
+
+    const fileFetch = (async (url: string) => {
+      assert.equal(url, 'https://files.example.test/object-input.png');
+      return new Response('downloaded object input', {
+        status: 200,
+        headers: { 'content-length': '23' },
+      });
+    }) as typeof fetch;
+
+    const service = new JobsService(
+      logsStore,
+      storageRoot,
+      noopScheduler,
+      fileFetch,
+    );
+    const { job_id } = await service.createJob();
+
+    const response = await service.uploadFile(job_id, {
+      openaiFileIdRefs: [
+        {
+          name: 'feef984b-2531-4ac6-a4c6-d8eb45097a4f.png',
+          id: 'file_00000000fddc72438aa508d29872311d',
+          mime_type: 'image/png',
+          download_link: 'https://files.example.test/object-input.png',
+        },
+      ],
+      filename: '../ignored-name.png',
+    });
+
+    const storedFile = path.join(
+      storageRoot,
+      job_id,
+      'workspace',
+      'input.png',
+    );
+
+    assert.equal(response.filename, 'input.png');
+    assert.equal(response.path_inside_container, '/workspace/input.png');
+    assert.equal(readFileSync(storedFile, 'utf8'), 'downloaded object input');
   });
 
   test('stores the simple file string fallback as input.png', async () => {

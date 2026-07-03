@@ -151,9 +151,24 @@ export class JobsController {
           type: 'array',
           maxItems: 1,
           description:
-            'The array where ChatGPT injects file reference strings including the secure, 5-minute transient download_link.',
+            'The array where ChatGPT injects file reference strings or file objects including the secure, 5-minute transient download_link.',
           items: {
-            type: 'string',
+            oneOf: [
+              {
+                type: 'string',
+              },
+              {
+                type: 'object',
+                required: ['name'],
+                properties: {
+                  name: { type: 'string' },
+                  id: { type: 'string' },
+                  mime_type: { type: 'string' },
+                  download_url: { type: 'string' },
+                  download_link: { type: 'string' },
+                },
+              },
+            ],
           },
         },
       },

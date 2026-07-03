@@ -14,7 +14,10 @@ import {
 import { JobPathsService } from '../storage/job-paths.service';
 import { JobStatusStore } from '../storage/job-status.store';
 import type { ReferencedFile } from '../job.types';
-import { UploadJobFilesDto } from '../dto/create-job.dto';
+import {
+  type OpenAiFileIdRefDto,
+  UploadJobFilesDto,
+} from '../dto/create-job.dto';
 
 const MAX_WORKSPACE_FILE_BYTES = 50 * 1024 * 1024;
 
@@ -38,8 +41,7 @@ export class JobFilesService {
     }
 
     const refs: ReferencedFile[] = (dto.openaiFileIdRefs ?? []).map((ref) => ({
-      name: dto.filename ?? 'input.png',
-      download_url: ref,
+      ...this.normalizeOpenAiFileRef(ref, dto.filename ?? 'input.png'),
     }));
 
     if (files.length === 0 && refs.length === 0 && dto.file) {
@@ -112,6 +114,26 @@ export class JobFilesService {
     }
 
     return buffer;
+  }
+
+  private normalizeOpenAiFileRef(
+    ref: string | OpenAiFileIdRefDto,
+    fallbackName: string,
+  ): ReferencedFile {
+    if (typeof ref === 'string') {
+      const downloadUrl = ref.trim();
+      return {
+        name: fallbackName,
+        download_url: downloadUrl,
+        download_link: downloadUrl,
+      };
+    }
+
+    return {
+      name: ref.name ?? fallbackName,
+      download_url: ref.download_url ?? ref.download_link,
+      download_link: ref.download_link ?? ref.download_url,
+    };
   }
 
   private storeInputImage(jobId: string, buffer: Buffer) {
