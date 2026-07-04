@@ -40,10 +40,6 @@ export class JobPathsService {
     return path.join(this.jobDir(jobId), 'artifacts');
   }
 
-  statusPath(jobId: string): string {
-    return path.join(this.jobDir(jobId), 'status.json');
-  }
-
   ensureJobDirs(jobId: string) {
     mkdirSync(this.jobDir(jobId), { recursive: true });
     mkdirSync(this.workspaceDir(jobId), { recursive: true });

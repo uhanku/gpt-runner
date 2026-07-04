@@ -17,6 +17,7 @@ import {
   BadRequestException,
   ConflictException,
   InternalServerErrorException,
+  NotFoundException,
   UnauthorizedException,
   ValidationPipe,
 } from '@nestjs/common';
@@ -28,6 +29,100 @@ import {
 } from '../../src/jobs/dto/create-job.dto';
 import { JobsService } from '../../src/jobs/jobs.service';
 import { JobLogsStore } from '../../src/jobs/job-logs.store';
+import type { JobStatus } from '../../src/jobs/job.types';
+
+const TEST_DOCKER_IMAGE = 'gpt-runner:test-image';
+const noopScheduler = (() => {
+  return ((callback: (...args: any[]) => void) => {
+    void callback;
+    return {} as NodeJS.Immediate;
+  }) as typeof setImmediate;
+})();
+
+function createJobSpec(
+  overrides: Partial<{ goal: string; repo_url?: string }> = {},
+) {
+  return {
+    goal: 'Run the repository test suite.',
+    repo_url: 'https://github.com/pallets/flask.git',
+    ...overrides,
+  };
+}
+
+function cloneJob(job: JobStatus): JobStatus {
+  return { ...job };
+}
+
+function createJobStoreMock(initialJobs: JobStatus[] = []) {
+  const entries = new Map(initialJobs.map((job) => [job.job_id, cloneJob(job)]));
+
+  return {
+    entries,
+    writeJob: async (jobId: string, status: JobStatus) => {
+      entries.set(jobId, cloneJob(status));
+    },
+    readJob: async (jobId: string) => {
+      const job = entries.get(jobId);
+
+      if (!job) {
+        throw new NotFoundException('Job not found');
+      }
+
+      return cloneJob(job);
+    },
+    deleteJob: async (jobId: string) => {
+      entries.delete(jobId);
+    },
+    listJobs: async () =>
+      [...entries.values()]
+        .map(cloneJob)
+        .sort((left, right) => {
+          const rightTime = Date.parse(right.updated_at) || Date.parse(right.created_at);
+          const leftTime = Date.parse(left.updated_at) || Date.parse(left.created_at);
+          return rightTime - leftTime;
+        }),
+    listQueuedJobs: async () =>
+      [...entries.values()]
+        .filter((job) => job.status === 'queued')
+        .map(cloneJob)
+        .sort((left, right) => {
+          const rightTime = Date.parse(right.updated_at) || Date.parse(right.created_at);
+          const leftTime = Date.parse(left.updated_at) || Date.parse(left.created_at);
+          return rightTime - leftTime;
+        }),
+    onModuleInit: async () => undefined,
+    onModuleDestroy: async () => undefined,
+  } as const;
+}
+
+function createJobsService(
+  logsStore: JobLogsStore,
+  storageRoot?: string,
+  scheduler: typeof setImmediate = noopScheduler,
+  fileFetchOrJobStore?: typeof fetch | ReturnType<typeof createJobStoreMock>,
+  jobStore = createJobStoreMock(),
+) {
+  const fileFetch =
+    typeof fileFetchOrJobStore === 'function' ? fileFetchOrJobStore : undefined;
+  const store =
+    typeof fileFetchOrJobStore === 'function'
+      ? jobStore
+      : fileFetchOrJobStore ?? jobStore;
+
+  return new JobsService(
+    logsStore,
+    storageRoot,
+    scheduler,
+    fileFetch,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    store as never,
+  );
+}
 
 describe('CreateJobDto', () => {
   const pipe = new ValidationPipe({
@@ -35,13 +130,12 @@ describe('CreateJobDto', () => {
     whitelist: true,
   });
 
-  test('accepts the nested job payload', async () => {
+  test('accepts the flat job payload', async () => {
     const result = await pipe.transform(
       {
-        job: {
-          goal: 'Run the repository tests and summarize failures.',
-          repo_url: 'https://github.com/pallets/flask.git',
-        },
+        docker_image_name: TEST_DOCKER_IMAGE,
+        goal: 'Run the repository tests and summarize failures.',
+        repo_url: 'https://github.com/pallets/flask.git',
       },
       {
         type: 'body',
@@ -51,22 +145,35 @@ describe('CreateJobDto', () => {
 
     assert.ok(result instanceof CreateJobDto);
     assert.equal(
-      result.job.goal,
+      result.goal,
       'Run the repository tests and summarize failures.',
     );
-    assert.equal(result.job.repo_url, 'https://github.com/pallets/flask.git');
+    assert.equal(result.repo_url, 'https://github.com/pallets/flask.git');
+  });
+
+  test('accepts goal without repo_url', async () => {
+    const result = await pipe.transform(
+      {
+        docker_image_name: TEST_DOCKER_IMAGE,
+        goal: 'Run the repository tests and summarize failures.',
+      },
+      {
+        type: 'body',
+        metatype: CreateJobDto,
+      } as never,
+    );
+
+    assert.ok(result instanceof CreateJobDto);
+    assert.equal(result.goal, 'Run the repository tests and summarize failures.');
+    assert.equal(result.repo_url, undefined);
   });
 
   test('rejects empty and incomplete create-job payloads', async () => {
     const cases = [
-      { payload: {}, message: 'job should be required' },
+      { payload: {}, message: 'docker_image_name should be required' },
       {
-        payload: { job: { goal: 'Run tests' } },
-        message: 'repo_url should be required inside job',
-      },
-      {
-        payload: { job: { repo_url: 'https://github.com/pallets/flask.git' } },
-        message: 'goal should be required inside job',
+        payload: { docker_image_name: TEST_DOCKER_IMAGE },
+        message: 'goal should be required',
       },
     ];
 
@@ -342,12 +449,6 @@ describe('UploadJobFilesDto', () => {
 });
 
 describe('JobsService.createJob', () => {
-  const noopScheduler = (() => {
-    return ((callback: (...args: any[]) => void) => {
-      void callback;
-      return {} as NodeJS.Immediate;
-    }) as typeof setImmediate;
-  })();
   let tempRoot: string;
   let storageRoot: string;
 
@@ -370,21 +471,18 @@ describe('JobsService.createJob', () => {
       onModuleDestroy: async () => undefined,
     } as unknown as JobLogsStore;
 
-    const service = new JobsService(logsStore, storageRoot, noopScheduler);
+    const jobStore = createJobStoreMock();
+    const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
     const response = await service.createJob(
-      {
-        goal: 'Run the repository test suite.',
-        repo_url: 'https://github.com/pallets/flask.git',
-      },
+      createJobSpec(),
+      TEST_DOCKER_IMAGE,
       'https://api.example.test',
     );
 
     assert.match(response.job_id, /^[0-9a-f-]{36}$/i);
     assert.equal(response.status, 'queued');
-    assert.deepEqual(response.job, {
-      goal: 'Run the repository test suite.',
-      repo_url: 'https://github.com/pallets/flask.git',
-    });
+    assert.equal(response.goal, 'Run the repository test suite.');
+    assert.equal(response.repo_url, 'https://github.com/pallets/flask.git');
     assert.equal(
       response.status_url,
       `https://api.example.test/jobs/${response.job_id}`,
@@ -394,19 +492,19 @@ describe('JobsService.createJob', () => {
       `https://api.example.test/jobs/${response.job_id}/artifacts`,
     );
 
-    const statusFile = path.join(storageRoot, response.job_id, 'status.json');
-
-    assert.ok(existsSync(statusFile));
-    assert.deepEqual(
-      JSON.parse(readFileSync(statusFile, 'utf8')).job,
-      {
-        goal: 'Run the repository test suite.',
-        repo_url: 'https://github.com/pallets/flask.git',
-      },
-    );
+    assert.deepEqual(jobStore.entries.get(response.job_id), {
+      job_id: response.job_id,
+      status: 'queued',
+      created_at: jobStore.entries.get(response.job_id)?.created_at,
+      updated_at: jobStore.entries.get(response.job_id)?.updated_at,
+      return_code: null,
+      goal: 'Run the repository test suite.',
+      repo_url: 'https://github.com/pallets/flask.git',
+      docker_image_name: TEST_DOCKER_IMAGE,
+    });
   });
 
-  test('persists create-job metadata to status.json', async () => {
+  test('persists create-job metadata to the jobs collection', async () => {
     const logsStore = {
       append: async () => undefined,
       tail: async () => '',
@@ -416,22 +514,26 @@ describe('JobsService.createJob', () => {
       onModuleDestroy: async () => undefined,
     } as unknown as JobLogsStore;
 
-    const service = new JobsService(logsStore, storageRoot, noopScheduler);
+    const jobStore = createJobStoreMock();
+    const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
     const response = await service.createJob(
       {
         goal: 'Collect logs for the failing build.',
         repo_url: 'https://github.com/pallets/flask.git',
       },
+      TEST_DOCKER_IMAGE,
       'https://api.example.test',
     );
 
-    const status = JSON.parse(
-      readFileSync(path.join(storageRoot, response.job_id, 'status.json'), 'utf8'),
-    );
-
-    assert.deepEqual(status.job, {
+    assert.deepEqual(jobStore.entries.get(response.job_id), {
+      job_id: response.job_id,
+      status: 'queued',
+      created_at: jobStore.entries.get(response.job_id)?.created_at,
+      updated_at: jobStore.entries.get(response.job_id)?.updated_at,
+      return_code: null,
       goal: 'Collect logs for the failing build.',
       repo_url: 'https://github.com/pallets/flask.git',
+      docker_image_name: TEST_DOCKER_IMAGE,
     });
   });
 
@@ -449,12 +551,17 @@ describe('JobsService.createJob', () => {
         onModuleDestroy: async () => undefined,
       } as unknown as JobLogsStore;
 
-      const service = new JobsService(logsStore, storageRoot, noopScheduler);
-      const response = await service.createJob();
+      const jobStore = createJobStoreMock();
+      const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
+      const response = await service.createJob(
+        createJobSpec(),
+        TEST_DOCKER_IMAGE,
+      );
 
       const storageJobDir = path.join(storageRoot, response.job_id);
 
-      assert.ok(existsSync(path.join(storageJobDir, 'status.json')));
+      assert.ok(existsSync(storageJobDir));
+      assert.deepEqual(jobStore.entries.get(response.job_id)?.docker_image_name, TEST_DOCKER_IMAGE);
       assert.equal(existsSync(path.join(ignoredRoot, response.job_id)), false);
     } finally {
       delete process.env.GPT_API_ROOT;
@@ -475,9 +582,10 @@ describe('JobsService.createJob', () => {
         onModuleDestroy: async () => undefined,
       } as unknown as JobLogsStore;
 
-      const service = new JobsService(logsStore, storageRoot, noopScheduler);
+      const service = createJobsService(logsStore, storageRoot, noopScheduler);
       const response = await service.createJob(
-        undefined,
+        createJobSpec(),
+        TEST_DOCKER_IMAGE,
         'https://request.example.test',
       );
 
@@ -515,8 +623,8 @@ describe('JobsService.createJob', () => {
       return {} as NodeJS.Immediate;
     }) as typeof setImmediate;
 
-    const service = new JobsService(logsStore, storageRoot, scheduler);
-    const response = await service.createJob();
+    const service = createJobsService(logsStore, storageRoot, scheduler);
+    const response = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
     assert.equal(scheduled, false);
     assert.match(response.job_id, /^[0-9a-f-]{36}$/i);
@@ -553,9 +661,10 @@ describe('JobsService.startJob', () => {
       return {} as NodeJS.Immediate;
     }) as typeof setImmediate;
 
-    const service = new JobsService(logsStore, storageRoot, scheduler);
-    const { job_id } = await service.createJob();
-    const response = service.startJob(
+    const jobStore = createJobStoreMock();
+    const service = createJobsService(logsStore, storageRoot, scheduler, jobStore);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const response = await service.startJob(
       job_id,
       {
         commands: ['python3 --version'],
@@ -566,17 +675,16 @@ describe('JobsService.startJob', () => {
     assert.equal(scheduled, true);
     assert.equal(response.job_id, job_id);
     assert.equal(response.status, 'running');
+    assert.equal(response.goal, 'Run the repository test suite.');
+    assert.equal(response.repo_url, 'https://github.com/pallets/flask.git');
     assert.equal(response.status_url, `https://api.example.test/jobs/${job_id}`);
     assert.equal(
       response.artifacts_url,
       `https://api.example.test/jobs/${job_id}/artifacts`,
     );
 
-    const status = JSON.parse(
-      readFileSync(path.join(storageRoot, job_id, 'status.json'), 'utf8'),
-    );
-    assert.equal(status.status, 'running');
-    assert.equal(status.return_code, null);
+    assert.equal(jobStore.entries.get(job_id)?.status, 'running');
+    assert.equal(jobStore.entries.get(job_id)?.return_code, null);
   });
 
   test('keeps stored job metadata in the start response', async () => {
@@ -594,20 +702,20 @@ describe('JobsService.startJob', () => {
       return {} as NodeJS.Immediate;
     }) as typeof setImmediate;
 
-    const service = new JobsService(logsStore, storageRoot, scheduler);
+    const service = createJobsService(logsStore, storageRoot, scheduler);
     const created = await service.createJob({
       goal: 'Run the repository tests after cloning the repo.',
       repo_url: 'https://github.com/pallets/flask.git',
-    });
+    }, TEST_DOCKER_IMAGE);
 
-    const response = service.startJob(created.job_id, {
+    const response = await service.startJob(created.job_id, {
       commands: ['python3 --version'],
     });
 
-    assert.deepEqual(response.job, {
-      goal: 'Run the repository tests after cloning the repo.',
-      repo_url: 'https://github.com/pallets/flask.git',
-    });
+    assert.equal(response.job_id, created.job_id);
+    assert.equal(response.status, 'running');
+    assert.equal(response.goal, 'Run the repository tests after cloning the repo.');
+    assert.equal(response.repo_url, 'https://github.com/pallets/flask.git');
   });
 
   test('allows repeated starts after terminal statuses', async () => {
@@ -627,27 +735,32 @@ describe('JobsService.startJob', () => {
       return {} as NodeJS.Immediate;
     }) as typeof setImmediate;
 
-    const service = new JobsService(logsStore, storageRoot, scheduler);
+    const service = createJobsService(logsStore, storageRoot, scheduler);
 
     for (const state of ['success', 'failed', 'timeout'] as const) {
-      const { job_id } = await service.createJob();
-      writeFileSync(
-        path.join(storageRoot, job_id, 'status.json'),
-        JSON.stringify(
-          {
-            job_id,
-            status: state,
-            created_at: '2026-01-01T10:00:00.000Z',
-            updated_at: '2026-01-01T10:05:00.000Z',
-            return_code: 1,
-          },
-          null,
-          2,
-        ),
-        'utf8',
+      const job_id = `job-${state}`;
+      const jobStore = createJobStoreMock([
+        {
+          job_id,
+          status: state,
+          created_at: '2026-01-01T10:00:00.000Z',
+          updated_at: '2026-01-01T10:05:00.000Z',
+          return_code: 1,
+          goal: 'Queue the job for later execution.',
+          repo_url: 'https://github.com/example/queued.git',
+          docker_image_name: TEST_DOCKER_IMAGE,
+        },
+      ]);
+      const stateService = createJobsService(
+        logsStore,
+        storageRoot,
+        scheduler,
+        jobStore,
       );
 
-      const response = service.startJob(job_id, { commands: ['echo again'] });
+      const response = await stateService.startJob(job_id, {
+        commands: ['echo again'],
+      });
       assert.equal(response.status, 'running');
     }
 
@@ -669,11 +782,12 @@ describe('JobsService.startJob', () => {
       return {} as NodeJS.Immediate;
     }) as typeof setImmediate;
 
-    const service = new JobsService(logsStore, storageRoot, scheduler);
-    const { job_id } = await service.createJob();
-    service.startJob(job_id, { commands: ['python3 --version'] });
+    const jobStore = createJobStoreMock();
+    const service = createJobsService(logsStore, storageRoot, scheduler, jobStore);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    await service.startJob(job_id, { commands: ['python3 --version'] });
 
-    assert.throws(
+    await assert.rejects(
       () => service.startJob(job_id, { commands: ['node --version'] }),
       ConflictException,
     );
@@ -691,7 +805,7 @@ describe('JobsService.safeScript', () => {
       onModuleDestroy: async () => undefined,
     } as unknown as JobLogsStore;
 
-    const service = new JobsService(logsStore);
+    const service = createJobsService(logsStore);
     const script = (service as unknown as {
       safeScript(dto: StartJobDto): string;
     }).safeScript({
@@ -734,7 +848,7 @@ describe('JobsService.safeScript', () => {
       onModuleDestroy: async () => undefined,
     } as unknown as JobLogsStore;
 
-    const service = new JobsService(logsStore);
+    const service = createJobsService(logsStore);
     const script = (service as unknown as {
       safeScript(dto: StartJobDto): string;
     }).safeScript({
@@ -761,7 +875,7 @@ describe('JobsService.safeScript', () => {
       onModuleDestroy: async () => undefined,
     } as unknown as JobLogsStore;
 
-    const service = new JobsService(logsStore);
+    const service = createJobsService(logsStore);
     const script = (service as unknown as {
       safeScript(dto: StartJobDto): string;
     }).safeScript({
@@ -776,12 +890,6 @@ describe('JobsService.safeScript', () => {
 });
 
 describe('JobsService.uploadFile', () => {
-  const noopScheduler = (() => {
-    return ((callback: (...args: any[]) => void) => {
-      void callback;
-      return {} as NodeJS.Immediate;
-    }) as typeof setImmediate;
-  })();
   let tempRoot: string;
   let storageRoot: string;
 
@@ -804,8 +912,8 @@ describe('JobsService.uploadFile', () => {
       onModuleDestroy: async () => undefined,
     } as unknown as JobLogsStore;
 
-    const service = new JobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob();
+    const service = createJobsService(logsStore, storageRoot, noopScheduler);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
     const response = await service.uploadFile(
       job_id,
@@ -848,13 +956,13 @@ describe('JobsService.uploadFile', () => {
       });
     }) as typeof fetch;
 
-    const service = new JobsService(
+    const service = createJobsService(
       logsStore,
       storageRoot,
       noopScheduler,
       fileFetch,
     );
-    const { job_id } = await service.createJob();
+    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
     const response = await service.uploadFile(job_id, {
       openaiFileIdRefs: ['https://files.example.test/input.png'],
@@ -891,13 +999,13 @@ describe('JobsService.uploadFile', () => {
       });
     }) as typeof fetch;
 
-    const service = new JobsService(
+    const service = createJobsService(
       logsStore,
       storageRoot,
       noopScheduler,
       fileFetch,
     );
-    const { job_id } = await service.createJob();
+    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
     const response = await service.uploadFile(job_id, {
       openaiFileIdRefs: [
@@ -941,13 +1049,13 @@ describe('JobsService.uploadFile', () => {
       });
     }) as typeof fetch;
 
-    const service = new JobsService(
+    const service = createJobsService(
       logsStore,
       storageRoot,
       noopScheduler,
       fileFetch,
     );
-    const { job_id } = await service.createJob();
+    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
     const response = await service.uploadFile(job_id, {
       file: 'sediment://files/input.png',
@@ -976,8 +1084,8 @@ describe('JobsService.uploadFile', () => {
       onModuleDestroy: async () => undefined,
     } as unknown as JobLogsStore;
 
-    const service = new JobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob();
+    const service = createJobsService(logsStore, storageRoot, noopScheduler);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
     await assert.rejects(
       () => service.uploadFile(job_id, {}, []),
@@ -1014,13 +1122,16 @@ describe('JobsService.uploadFile', () => {
 
     const failedFetch = (async () =>
       new Response('missing', { status: 404 })) as typeof fetch;
-    const failedService = new JobsService(
+    const failedService = createJobsService(
       logsStore,
       storageRoot,
       noopScheduler,
       failedFetch,
     );
-    const failedJob = await failedService.createJob();
+    const failedJob = await failedService.createJob(
+      createJobSpec(),
+      TEST_DOCKER_IMAGE,
+    );
 
     await assert.rejects(
       () =>
@@ -1035,13 +1146,16 @@ describe('JobsService.uploadFile', () => {
         status: 200,
         headers: { 'content-length': String(51 * 1024 * 1024) },
       })) as typeof fetch;
-    const oversizedService = new JobsService(
+    const oversizedService = createJobsService(
       logsStore,
       storageRoot,
       noopScheduler,
       oversizedFetch,
     );
-    const oversizedJob = await oversizedService.createJob();
+    const oversizedJob = await oversizedService.createJob(
+      createJobSpec(),
+      TEST_DOCKER_IMAGE,
+    );
 
     await assert.rejects(
       () =>
@@ -1062,9 +1176,9 @@ describe('JobsService.uploadFile', () => {
       onModuleDestroy: async () => undefined,
     } as unknown as JobLogsStore;
 
-    const service = new JobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob();
-    service.startJob(job_id, { commands: ['python3 --version'] });
+    const service = createJobsService(logsStore, storageRoot, noopScheduler);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    await service.startJob(job_id, { commands: ['python3 --version'] });
 
     await assert.rejects(
       () =>
@@ -1084,12 +1198,6 @@ describe('JobsService.uploadFile', () => {
 });
 
 describe('JobsService.listArtifacts', () => {
-  const noopScheduler = (() => {
-    return ((callback: (...args: any[]) => void) => {
-      void callback;
-      return {} as NodeJS.Immediate;
-    }) as typeof setImmediate;
-  })();
   let tempRoot: string;
   let storageRoot: string;
   let previousPublicArtifactSecret: string | undefined;
@@ -1121,8 +1229,8 @@ describe('JobsService.listArtifacts', () => {
       onModuleDestroy: async () => undefined,
     } as unknown as JobLogsStore;
 
-    const service = new JobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob();
+    const service = createJobsService(logsStore, storageRoot, noopScheduler);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
     const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
     mkdirSync(path.join(artifactsDir, 'nested'), { recursive: true });
@@ -1132,7 +1240,7 @@ describe('JobsService.listArtifacts', () => {
       'utf8',
     );
 
-    const response = service.listArtifacts(job_id, 'https://api.example.test/');
+    const response = await service.listArtifacts(job_id, 'https://api.example.test/');
 
     assert.equal(response.job_id, job_id);
     assert.equal(response.artifacts.length, 1);
@@ -1147,7 +1255,7 @@ describe('JobsService.listArtifacts', () => {
     assert.equal(downloadUrl.searchParams.get('path'), 'nested/report one.txt');
     assert.match(downloadUrl.searchParams.get('signature') || '', /^[0-9a-f]{64}$/);
 
-    const file = service.getArtifactFile(
+    const file = await service.getArtifactFile(
       job_id,
       'nested/report one.txt',
       downloadUrl.searchParams.get('signature') || '',
@@ -1172,13 +1280,13 @@ describe('JobsService.listArtifacts', () => {
         onModuleDestroy: async () => undefined,
       } as unknown as JobLogsStore;
 
-      const service = new JobsService(logsStore, storageRoot, noopScheduler);
-      const { job_id } = await service.createJob();
+      const service = createJobsService(logsStore, storageRoot, noopScheduler);
+      const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
       const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
       writeFileSync(path.join(artifactsDir, 'report.txt'), 'ok', 'utf8');
 
-      const response = service.listArtifacts(
+      const response = await service.listArtifacts(
         job_id,
         'https://request.example.test',
       );
@@ -1224,7 +1332,7 @@ describe('JobsService.listArtifacts', () => {
       ],
     };
 
-    const service = new JobsService(logsStore, storageRoot, noopScheduler);
+    const service = createJobsService(logsStore, storageRoot, noopScheduler);
     const script = (service as unknown as {
       safeScript(dto: StartJobDto): string;
     }).safeScript(dto);
@@ -1239,7 +1347,7 @@ describe('JobsService.listArtifacts', () => {
       /cargo run --release -- mixed-pixel-art\.png \/artifacts\/spritefusion-pixel-snapped\.png 4 --pixel-size 8/,
     );
 
-    const { job_id } = await service.createJob();
+    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
     const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
     const outputImage = path.join(artifactsDir, 'spritefusion-pixel-snapped.png');
     writeFileSync(
@@ -1250,7 +1358,7 @@ describe('JobsService.listArtifacts', () => {
       ),
     );
 
-    const response = service.listArtifacts(job_id, 'https://api.example.test');
+    const response = await service.listArtifacts(job_id, 'https://api.example.test');
 
     assert.equal(response.artifacts.length, 1);
     assert.equal(
@@ -1270,7 +1378,7 @@ describe('JobsService.listArtifacts', () => {
     );
     assert.match(downloadUrl.searchParams.get('signature') || '', /^[0-9a-f]{64}$/);
 
-    const file = service.getArtifactFile(
+    const file = await service.getArtifactFile(
       job_id,
       'spritefusion-pixel-snapped.png',
       downloadUrl.searchParams.get('signature') || '',
@@ -1290,33 +1398,33 @@ describe('JobsService.listArtifacts', () => {
       onModuleDestroy: async () => undefined,
     } as unknown as JobLogsStore;
 
-    const service = new JobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob();
-    const otherJob = await service.createJob();
+    const service = createJobsService(logsStore, storageRoot, noopScheduler);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const otherJob = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
     const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
     writeFileSync(path.join(artifactsDir, 'report.txt'), 'ok', 'utf8');
     writeFileSync(path.join(artifactsDir, 'other.txt'), 'ok', 'utf8');
 
-    const response = service.listArtifacts(job_id, 'https://api.example.test');
+    const response = await service.listArtifacts(job_id, 'https://api.example.test');
     const report = response.artifacts.find((artifact) => artifact.name === 'report.txt');
     assert.ok(report);
     const signature = new URL(report.download_url).searchParams.get('signature');
     assert.ok(signature);
 
-    assert.throws(
+    await assert.rejects(
       () => service.getArtifactFile(job_id, 'report.txt', ''),
       UnauthorizedException,
     );
-    assert.throws(
+    await assert.rejects(
       () => service.getArtifactFile(job_id, 'report.txt', 'not-hex'),
       UnauthorizedException,
     );
-    assert.throws(
+    await assert.rejects(
       () => service.getArtifactFile(job_id, 'other.txt', signature),
       UnauthorizedException,
     );
-    assert.throws(
+    await assert.rejects(
       () => service.getArtifactFile(otherJob.job_id, 'report.txt', signature),
       UnauthorizedException,
     );
@@ -1334,13 +1442,13 @@ describe('JobsService.listArtifacts', () => {
       onModuleDestroy: async () => undefined,
     } as unknown as JobLogsStore;
 
-    const service = new JobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob();
+    const service = createJobsService(logsStore, storageRoot, noopScheduler);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
     const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
     writeFileSync(path.join(artifactsDir, 'report.txt'), 'ok', 'utf8');
 
-    assert.throws(
+    await assert.rejects(
       () => service.listArtifacts(job_id, 'https://api.example.test'),
       InternalServerErrorException,
     );
@@ -1402,7 +1510,7 @@ describe('JobsService.listJobs', () => {
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  test('returns summaries for persisted jobs and ignores unrelated paths', () => {
+  test('returns summaries for persisted jobs and ignores unrelated paths', async () => {
     const logsStore = {
       append: async () => undefined,
       tail: async () => '',
@@ -1412,66 +1520,38 @@ describe('JobsService.listJobs', () => {
       onModuleDestroy: async () => undefined,
     } as unknown as JobLogsStore;
 
-    const service = new JobsService(logsStore, storageRoot);
+    const jobStore = createJobStoreMock([
+      {
+        job_id: 'job-older',
+        goal: 'Inspect the older job.',
+        repo_url: 'https://github.com/example/older.git',
+        status: 'success',
+        created_at: '2026-01-01T10:00:00.000Z',
+        updated_at: '2026-01-01T10:05:00.000Z',
+        return_code: 0,
+        docker_image_name: TEST_DOCKER_IMAGE,
+      },
+      {
+        job_id: 'job-newer',
+        goal: 'Inspect the newer job.',
+        repo_url: 'https://github.com/example/newer.git',
+        status: 'running',
+        created_at: '2026-01-02T10:00:00.000Z',
+        updated_at: '2026-01-02T10:30:00.000Z',
+        return_code: null,
+        docker_image_name: TEST_DOCKER_IMAGE,
+      },
+    ]);
+    const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
 
-    const olderJob = path.join(storageRoot, 'job-older');
-    const newerJob = path.join(storageRoot, 'job-newer');
-    const unrelatedFile = path.join(storageRoot, 'not-a-job.txt');
-
-    mkdirSync(olderJob, { recursive: true });
-    mkdirSync(newerJob, { recursive: true });
-    writeFileSync(unrelatedFile, 'ignore me', 'utf8');
-    mkdirSync(path.join(storageRoot, 'missing-status'), { recursive: true });
-
-    writeFileSync(
-      path.join(olderJob, 'status.json'),
-      JSON.stringify(
-        {
-          job_id: 'job-older',
-          job: {
-            goal: 'Inspect the older job.',
-            repo_url: 'https://github.com/example/older.git',
-          },
-          status: 'success',
-          created_at: '2026-01-01T10:00:00.000Z',
-          updated_at: '2026-01-01T10:05:00.000Z',
-          return_code: 0,
-        },
-        null,
-        2,
-      ),
-      'utf8',
-    );
-
-    writeFileSync(
-      path.join(newerJob, 'status.json'),
-      JSON.stringify(
-        {
-          job_id: 'job-newer',
-          job: {
-            goal: 'Inspect the newer job.',
-            repo_url: 'https://github.com/example/newer.git',
-          },
-          status: 'running',
-          created_at: '2026-01-02T10:00:00.000Z',
-          updated_at: '2026-01-02T10:30:00.000Z',
-          return_code: null,
-        },
-        null,
-        2,
-      ),
-      'utf8',
-    );
-
-    const jobs = service.listJobs();
+    const jobs = await service.listJobs();
 
     assert.deepEqual(jobs, [
       {
         job_id: 'job-newer',
-        job: {
-          goal: 'Inspect the newer job.',
-          repo_url: 'https://github.com/example/newer.git',
-        },
+        goal: 'Inspect the newer job.',
+        repo_url: 'https://github.com/example/newer.git',
+        docker_image_name: TEST_DOCKER_IMAGE,
         status: 'running',
         created_at: '2026-01-02T10:00:00.000Z',
         updated_at: '2026-01-02T10:30:00.000Z',
@@ -1479,10 +1559,9 @@ describe('JobsService.listJobs', () => {
       },
       {
         job_id: 'job-older',
-        job: {
-          goal: 'Inspect the older job.',
-          repo_url: 'https://github.com/example/older.git',
-        },
+        goal: 'Inspect the older job.',
+        repo_url: 'https://github.com/example/older.git',
+        docker_image_name: TEST_DOCKER_IMAGE,
         status: 'success',
         created_at: '2026-01-01T10:00:00.000Z',
         updated_at: '2026-01-01T10:05:00.000Z',
@@ -1506,7 +1585,7 @@ describe('JobsService.listQueuedJobs', () => {
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  test('returns only jobs that are still queued', () => {
+  test('returns only jobs that are still queued', async () => {
     const logsStore = {
       append: async () => undefined,
       tail: async () => '',
@@ -1516,61 +1595,36 @@ describe('JobsService.listQueuedJobs', () => {
       onModuleDestroy: async () => undefined,
     } as unknown as JobLogsStore;
 
-    const service = new JobsService(logsStore, storageRoot);
-
-    const queuedJob = path.join(storageRoot, 'job-queued');
-    const runningJob = path.join(storageRoot, 'job-running');
-
-    mkdirSync(queuedJob, { recursive: true });
-    mkdirSync(runningJob, { recursive: true });
-
-    writeFileSync(
-      path.join(queuedJob, 'status.json'),
-      JSON.stringify(
-        {
-          job_id: 'job-queued',
-          job: {
-            goal: 'Queue the job for later execution.',
-            repo_url: 'https://github.com/example/queued.git',
-          },
-          status: 'queued',
-          created_at: '2026-01-03T10:00:00.000Z',
-          updated_at: '2026-01-03T10:00:00.000Z',
-          return_code: null,
-        },
-        null,
-        2,
-      ),
-      'utf8',
-    );
-
-    writeFileSync(
-      path.join(runningJob, 'status.json'),
-      JSON.stringify(
-        {
-          job_id: 'job-running',
-          job: {
-            goal: 'The running job should be filtered out.',
-            repo_url: 'https://github.com/example/running.git',
-          },
-          status: 'running',
-          created_at: '2026-01-03T11:00:00.000Z',
-          updated_at: '2026-01-03T11:10:00.000Z',
-          return_code: null,
-        },
-        null,
-        2,
-      ),
-      'utf8',
-    );
-
-    assert.deepEqual(service.listQueuedJobs(), [
+    const jobStore = createJobStoreMock([
       {
         job_id: 'job-queued',
-        job: {
-          goal: 'Queue the job for later execution.',
-          repo_url: 'https://github.com/example/queued.git',
-        },
+        goal: 'Queue the job for later execution.',
+        repo_url: 'https://github.com/example/queued.git',
+        status: 'queued',
+        created_at: '2026-01-03T10:00:00.000Z',
+        updated_at: '2026-01-03T10:00:00.000Z',
+        return_code: null,
+        docker_image_name: TEST_DOCKER_IMAGE,
+      },
+      {
+        job_id: 'job-running',
+        goal: 'The running job should be filtered out.',
+        repo_url: 'https://github.com/example/running.git',
+        status: 'running',
+        created_at: '2026-01-03T11:00:00.000Z',
+        updated_at: '2026-01-03T11:10:00.000Z',
+        return_code: null,
+        docker_image_name: TEST_DOCKER_IMAGE,
+      },
+    ]);
+    const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
+
+    assert.deepEqual(await service.listQueuedJobs(), [
+      {
+        job_id: 'job-queued',
+        goal: 'Queue the job for later execution.',
+        repo_url: 'https://github.com/example/queued.git',
+        docker_image_name: TEST_DOCKER_IMAGE,
         status: 'queued',
         created_at: '2026-01-03T10:00:00.000Z',
         updated_at: '2026-01-03T10:00:00.000Z',

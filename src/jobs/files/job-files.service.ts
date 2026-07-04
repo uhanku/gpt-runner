@@ -12,7 +12,7 @@ import {
   type FileFetch,
 } from '../job.tokens';
 import { JobPathsService } from '../storage/job-paths.service';
-import { JobStatusStore } from '../storage/job-status.store';
+import { JobStore } from '../storage/job-store';
 import type { ReferencedFile } from '../job.types';
 import {
   type OpenAiFileIdRefDto,
@@ -24,7 +24,7 @@ const MAX_WORKSPACE_FILE_BYTES = 50 * 1024 * 1024;
 @Injectable()
 export class JobFilesService {
   constructor(
-    private readonly statuses: JobStatusStore,
+    private readonly statuses: JobStore,
     private readonly paths: JobPathsService,
     @Optional() @Inject(JOB_FILE_FETCH)
     private readonly fileFetch: FileFetch = fetch,
@@ -35,7 +35,7 @@ export class JobFilesService {
     dto: UploadJobFilesDto,
     files: Express.Multer.File[] = [],
   ) {
-    const status = this.statuses.readStatus(jobId);
+    const status = await this.statuses.readJob(jobId);
     if (status.status === 'running') {
       throw new ConflictException('Cannot upload files while the job is running');
     }

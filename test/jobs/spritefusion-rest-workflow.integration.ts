@@ -12,10 +12,8 @@ import { JobLogsStore } from '../../src/jobs/job-logs.store';
 interface JobEnvelope {
   job_id: string;
   status: 'queued' | 'running' | 'success' | 'failed' | 'timeout' | 'deleted';
-  job?: {
-    goal: string;
-    repo_url: string;
-  };
+  goal: string;
+  repo_url?: string;
   status_url: string;
   artifacts_url: string;
 }
@@ -23,10 +21,9 @@ interface JobEnvelope {
 interface JobStatus {
   job_id: string;
   status: 'queued' | 'running' | 'success' | 'failed' | 'timeout' | 'deleted';
-  job?: {
-    goal: string;
-    repo_url: string;
-  };
+  docker_image_name: string;
+  goal: string;
+  repo_url?: string;
   return_code: number | null;
   logs_tail?: string;
 }
@@ -48,6 +45,7 @@ const fixturePath = path.resolve(
   'images',
   'cat-icon-gpt.png',
 );
+const runnerImage = 'gpt-runner:bookworm';
 
 describe('SpriteFusion Pixel Snapper REST workflow', () => {
   let app: INestApplication | undefined;
@@ -56,7 +54,6 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
   let previousActionApiKey: string | undefined;
   let previousPublicArtifactSecret: string | undefined;
   let previousPublicBaseUrl: string | undefined;
-  let previousRunnerImage: string | undefined;
   let baseUrl: string;
   let jobId: string | undefined;
 
@@ -66,11 +63,9 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
     previousActionApiKey = process.env.ACTION_API_KEY;
     previousPublicArtifactSecret = process.env.PUBLIC_ARTIFACT_SECRET;
     previousPublicBaseUrl = process.env.PUBLIC_BASE_URL;
-    previousRunnerImage = process.env.RUNNER_IMAGE;
 
     process.env.ACTION_API_KEY = 'spritefusion-rest-workflow-key';
     process.env.PUBLIC_ARTIFACT_SECRET = 'spritefusion-rest-workflow-secret';
-    process.env.RUNNER_IMAGE = process.env.RUNNER_IMAGE || 'gpt-runner:bookworm';
     delete process.env.PUBLIC_BASE_URL;
     process.chdir(tempRoot);
   });
@@ -96,7 +91,6 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
     restoreEnv('ACTION_API_KEY', previousActionApiKey);
     restoreEnv('PUBLIC_ARTIFACT_SECRET', previousPublicArtifactSecret);
     restoreEnv('PUBLIC_BASE_URL', previousPublicBaseUrl);
-    restoreEnv('RUNNER_IMAGE', previousRunnerImage);
     rmSync(tempRoot, { recursive: true, force: true });
     jobId = undefined;
   });
@@ -121,20 +115,23 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        job: {
-          goal: 'Run the SpriteFusion pixel snapper workflow.',
-          repo_url: 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
-        },
+        docker_image_name: runnerImage,
+        goal: 'Run the SpriteFusion pixel snapper workflow.',
+        repo_url: 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
       }),
     });
 
     jobId = created.job_id;
     assert.match(created.job_id, /^[0-9a-f-]{36}$/i);
     assert.equal(created.status, 'queued');
-    assert.deepEqual(created.job, {
-      goal: 'Run the SpriteFusion pixel snapper workflow.',
-      repo_url: 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
-    });
+    assert.equal(
+      created.goal,
+      'Run the SpriteFusion pixel snapper workflow.',
+    );
+    assert.equal(
+      created.repo_url,
+      'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
+    );
     assert.equal(created.status_url, `${baseUrl}/jobs/${created.job_id}`);
     assert.equal(
       created.artifacts_url,
@@ -347,11 +344,11 @@ function dockerUnavailableReason() {
   }
 
   try {
-    execFileSync('docker', ['image', 'inspect', process.env.RUNNER_IMAGE || ''], {
+    execFileSync('docker', ['image', 'inspect', runnerImage], {
       stdio: 'ignore',
     });
   } catch {
-    return `Runner image ${process.env.RUNNER_IMAGE} is missing; build it with: docker build -t gpt-runner:bookworm ./runner`;
+    return `Runner image ${runnerImage} is missing; build it with: docker build -t ${runnerImage} ./runner`;
   }
 
   return '';

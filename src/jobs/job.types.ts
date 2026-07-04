@@ -8,7 +8,7 @@ export type JobState =
 
 export interface JobSpec {
   goal: string;
-  repo_url: string;
+  repo_url?: string;
 }
 
 export interface JobStatus {
@@ -17,7 +17,9 @@ export interface JobStatus {
   created_at: string;
   updated_at: string;
   return_code: number | null;
-  job?: JobSpec;
+  goal: string;
+  repo_url?: string;
+  docker_image_name: string;
   logs_tail?: string;
 }
 
@@ -27,7 +29,9 @@ export interface JobSummary {
   created_at: string;
   updated_at: string;
   return_code: number | null;
-  job?: JobSpec;
+  goal: string;
+  repo_url?: string;
+  docker_image_name: string;
 }
 
 export interface ReferencedFile {

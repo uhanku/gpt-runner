@@ -43,29 +43,31 @@ export class JobsController {
     schema: {
       type: 'object',
       properties: {
-        job: {
-          type: 'object',
-          properties: {
-            goal: {
-              type: 'string',
-              description: 'The goal of the job.',
-            },
-            repo_url: {
-              type: 'string',
-              description: 'The repository URL for the job.',
-            },
-          },
-          required: ['goal', 'repo_url'],
+        docker_image_name: {
+          type: 'string',
+          description: 'Docker image name used to run the job.',
+        },
+        goal: {
+          type: 'string',
+          description: 'The goal of the job.',
+        },
+        repo_url: {
+          type: 'string',
+          description: 'The repository URL for the job.',
         },
       },
-      required: ['job'],
+      required: ['goal', 'docker_image_name'],
     },
   })
   async createJob(
     @Body() dto: CreateJobDto,
     @Req() request: Request,
   ) {
-    return this.jobsService.createJob(dto.job, this.requestOrigin(request));
+    return this.jobsService.createJob(
+      { goal: dto.goal, repo_url: dto.repo_url },
+      dto.docker_image_name,
+      this.requestOrigin(request),
+    );
   }
 
   @Get()
@@ -75,15 +77,10 @@ export class JobsController {
       items: {
         type: 'object',
         properties: {
-          job: {
-            type: 'object',
-            nullable: true,
-            properties: {
-              goal: { type: 'string' },
-              repo_url: { type: 'string' },
-            },
-          },
+          goal: { type: 'string' },
+          repo_url: { type: 'string', nullable: true },
           job_id: { type: 'string' },
+          docker_image_name: { type: 'string' },
           status: {
             type: 'string',
             enum: ['queued', 'running', 'success', 'failed', 'timeout', 'deleted'],
@@ -92,11 +89,11 @@ export class JobsController {
           updated_at: { type: 'string', format: 'date-time' },
           return_code: { type: 'integer', nullable: true },
         },
-        required: ['job_id', 'status', 'created_at', 'updated_at', 'return_code'],
+        required: ['job_id', 'goal', 'docker_image_name', 'status', 'created_at', 'updated_at', 'return_code'],
       },
     },
   })
-  listJobs() {
+  async listJobs() {
     return this.jobsService.listJobs();
   }
 
@@ -107,15 +104,10 @@ export class JobsController {
       items: {
         type: 'object',
         properties: {
-          job: {
-            type: 'object',
-            nullable: true,
-            properties: {
-              goal: { type: 'string' },
-              repo_url: { type: 'string' },
-            },
-          },
+          goal: { type: 'string' },
+          repo_url: { type: 'string', nullable: true },
           job_id: { type: 'string' },
+          docker_image_name: { type: 'string' },
           status: {
             type: 'string',
             enum: ['queued', 'running', 'success', 'failed', 'timeout', 'deleted'],
@@ -124,11 +116,11 @@ export class JobsController {
           updated_at: { type: 'string', format: 'date-time' },
           return_code: { type: 'integer', nullable: true },
         },
-        required: ['job_id', 'status', 'created_at', 'updated_at', 'return_code'],
+        required: ['job_id', 'goal', 'docker_image_name', 'status', 'created_at', 'updated_at', 'return_code'],
       },
     },
   })
-  listQueuedJobs() {
+  async listQueuedJobs() {
     return this.jobsService.listQueuedJobs();
   }
 
@@ -235,19 +227,19 @@ export class JobsController {
   }
 
   @Get(':jobId/artifacts')
-  listArtifacts(@Param('jobId') jobId: string, @Req() request: Request) {
+  async listArtifacts(@Param('jobId') jobId: string, @Req() request: Request) {
     return this.jobsService.listArtifacts(jobId, this.requestOrigin(request));
   }
 
   @Get(':jobId/artifact')
   @PublicRoute()
-  downloadArtifact(
+  async downloadArtifact(
     @Param('jobId') jobId: string,
     @Query('path') artifactPath: string,
     @Query('signature') signature: string,
     @Res() res: Response,
   ) {
-    const file = this.jobsService.getArtifactFile(
+    const file = await this.jobsService.getArtifactFile(
       jobId,
       artifactPath,
       signature,

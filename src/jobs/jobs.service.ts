@@ -20,7 +20,7 @@ import { JobArtifactsService } from './artifacts/job-artifacts.service';
 import { ArtifactSignerService } from './artifacts/artifact-signer.service';
 import { JobFilesService } from './files/job-files.service';
 import { JobPathsService } from './storage/job-paths.service';
-import { JobStatusStore } from './storage/job-status.store';
+import { JobStore } from './storage/job-store';
 import { JobRunnerService } from './runner/job-runner.service';
 import { JobScriptBuilder } from './runner/job-script.builder';
 import { JobUrlService } from './job-url.service';
@@ -32,7 +32,7 @@ export class JobsService {
   );
 
   private readonly paths: JobPathsService;
-  private readonly statuses: JobStatusStore;
+  private readonly statuses: JobStore;
   private readonly urls: JobUrlService;
   private readonly scriptBuilder: JobScriptBuilder;
   private readonly runner: JobRunnerService;
@@ -49,15 +49,15 @@ export class JobsService {
     @Inject(JOB_FILE_FETCH)
     private readonly fileFetch: FileFetch = fetch,
     @Optional() private readonly jobPaths?: JobPathsService,
-    @Optional() private readonly jobStatusStore?: JobStatusStore,
     @Optional() private readonly jobUrlService?: JobUrlService,
     @Optional() private readonly jobScriptBuilder?: JobScriptBuilder,
     @Optional() private readonly jobRunner?: JobRunnerService,
     @Optional() private readonly jobFiles?: JobFilesService,
     @Optional() private readonly jobArtifacts?: JobArtifactsService,
+    @Optional() private readonly jobStore?: JobStore,
   ) {
     this.paths = jobPaths ?? new JobPathsService(storageRoot);
-    this.statuses = jobStatusStore ?? new JobStatusStore(this.paths);
+    this.statuses = jobStore ?? new JobStore();
     this.urls = jobUrlService ?? new JobUrlService();
 
     this.scriptBuilder = jobScriptBuilder ?? new JobScriptBuilder();
@@ -85,7 +85,11 @@ export class JobsService {
     this.artifacts = artifacts;
   }
 
-  async createJob(job?: JobSpec, fallbackBaseUrl?: string) {
+  async createJob(
+    job: JobSpec,
+    dockerImageName: string,
+    fallbackBaseUrl?: string,
+  ) {
     const jobId = randomUUID();
     const baseUrl = this.urls.publicBaseUrl(fallbackBaseUrl);
 
@@ -97,27 +101,29 @@ export class JobsService {
       created_at: this.nowIso(),
       updated_at: this.nowIso(),
       return_code: null,
-      job,
+      goal: job.goal,
+      ...(job.repo_url !== undefined ? { repo_url: job.repo_url } : {}),
+      docker_image_name: dockerImageName,
     };
 
-    this.statuses.writeStatus(jobId, status);
+    await this.statuses.writeJob(jobId, status);
 
     return this.jobEnvelope(jobId, 'queued', baseUrl, job);
   }
 
   async getJob(jobId: string) {
-    const status = this.statuses.readStatus(jobId);
+    const status = await this.statuses.readJob(jobId);
     return {
       ...status,
       logs_tail: await this.jobLogsStore.tail(jobId, this.maxLogTailBytes),
     };
   }
 
-  listJobs(): JobSummary[] {
+  async listJobs(): Promise<JobSummary[]> {
     return this.statuses.listJobs();
   }
 
-  listQueuedJobs(): JobSummary[] {
+  async listQueuedJobs(): Promise<JobSummary[]> {
     return this.statuses.listQueuedJobs();
   }
 
@@ -125,8 +131,12 @@ export class JobsService {
     return this.jobLogsStore.recent(limit);
   }
 
-  startJob(jobId: string, dto: StartJobDto, fallbackBaseUrl?: string) {
-    const status = this.statuses.readStatus(jobId);
+  async startJob(
+    jobId: string,
+    dto: StartJobDto,
+    fallbackBaseUrl?: string,
+  ) {
+    const status = await this.statuses.readJob(jobId);
     if (status.status === 'running') {
       throw new ConflictException('Job is already running');
     }
@@ -134,17 +144,24 @@ export class JobsService {
     status.status = 'running';
     status.return_code = null;
     status.updated_at = this.nowIso();
-    this.statuses.writeStatus(jobId, status);
+    await this.statuses.writeJob(jobId, status);
 
     this.scheduleImmediate(() => {
-      this.runner.runJob(jobId, dto);
+      void this.runner.runJob(jobId, dto).catch((error) => {
+        process.stderr.write(
+          `[gpt-runner] failed to start job ${jobId}: ${String(error)}\n`,
+        );
+      });
     });
 
     return this.jobEnvelope(
       jobId,
       'running',
       this.urls.publicBaseUrl(fallbackBaseUrl),
-      status.job,
+      {
+        goal: status.goal,
+        ...(status.repo_url !== undefined ? { repo_url: status.repo_url } : {}),
+      },
     );
   }
 
@@ -156,11 +173,11 @@ export class JobsService {
     return this.files.uploadFile(jobId, dto, files);
   }
 
-  listArtifacts(jobId: string, fallbackBaseUrl?: string) {
+  async listArtifacts(jobId: string, fallbackBaseUrl?: string) {
     return this.artifacts.listArtifacts(jobId, fallbackBaseUrl);
   }
 
-  getArtifactFile(jobId: string, artifactPath: string, signature: string) {
+  async getArtifactFile(jobId: string, artifactPath: string, signature: string) {
     return this.artifacts.getArtifactFile(jobId, artifactPath, signature);
   }
 
@@ -177,6 +194,7 @@ export class JobsService {
 
     this.runner.forceRemoveContainer(jobId);
     await this.jobLogsStore.deleteByJobId(jobId);
+    await this.statuses.deleteJob(jobId);
     rmSync(dir, { recursive: true, force: true });
 
     return {
@@ -191,13 +209,29 @@ export class JobsService {
     baseUrl: string,
     job?: JobSpec,
   ) {
-    return {
+    const envelope: {
+      job_id: string;
+      status: JobState;
+      status_url: string;
+      artifacts_url: string;
+      goal?: string;
+      repo_url?: string;
+    } = {
       job_id: jobId,
       status,
-      ...(job ? { job } : {}),
       status_url: this.urls.absoluteUrl(baseUrl, `/jobs/${jobId}`),
       artifacts_url: this.urls.absoluteUrl(baseUrl, `/jobs/${jobId}/artifacts`),
     };
+
+    if (job) {
+      envelope.goal = job.goal;
+
+      if (job.repo_url !== undefined) {
+        envelope.repo_url = job.repo_url;
+      }
+    }
+
+    return envelope;
   }
 
   private nowIso(): string {

@@ -7,20 +7,20 @@ import { existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { JobUrlService } from '../job-url.service';
 import { JobPathsService } from '../storage/job-paths.service';
-import { JobStatusStore } from '../storage/job-status.store';
+import { JobStore } from '../storage/job-store';
 import { ArtifactSignerService } from './artifact-signer.service';
 
 @Injectable()
 export class JobArtifactsService {
   constructor(
-    private readonly statuses: JobStatusStore,
+    private readonly statuses: JobStore,
     private readonly paths: JobPathsService,
     private readonly signer: ArtifactSignerService,
     private readonly urls: JobUrlService,
   ) {}
 
-  listArtifacts(jobId: string, fallbackBaseUrl?: string) {
-    this.statuses.readStatus(jobId);
+  async listArtifacts(jobId: string, fallbackBaseUrl?: string) {
+    await this.statuses.readJob(jobId);
 
     const baseUrl = this.urls.publicBaseUrl(fallbackBaseUrl);
     const base = this.paths.artifactsDir(jobId);
@@ -46,8 +46,8 @@ export class JobArtifactsService {
     };
   }
 
-  getArtifactFile(jobId: string, artifactPath: string, signature: string) {
-    this.statuses.readStatus(jobId);
+  async getArtifactFile(jobId: string, artifactPath: string, signature: string) {
+    await this.statuses.readJob(jobId);
 
     if (!artifactPath) {
       throw new BadRequestException('Missing artifact path');

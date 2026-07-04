@@ -4,7 +4,6 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
-  IsDefined,
   IsIn,
   IsInt,
   IsOptional,
@@ -15,7 +14,6 @@ import {
   ValidationArguments,
   ValidatorConstraint,
   ValidatorConstraintInterface,
-  ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -128,7 +126,14 @@ class OpenAiFileIdRefsConstraint
   }
 }
 
-export class CreateJobJobDto {
+export class CreateJobDto {
+  @ApiProperty({
+    description: 'Docker image name used to run the job.',
+    example: 'gpt-runner:bookworm',
+  })
+  @IsString()
+  docker_image_name!: string;
+
   @ApiProperty({
     description: 'The goal of the job.',
     example: 'Run the repository test suite and report failures.',
@@ -136,23 +141,13 @@ export class CreateJobJobDto {
   @IsString()
   goal!: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'The repository URL for the job.',
     example: 'https://github.com/pallets/flask.git',
   })
+  @IsOptional()
   @IsString()
-  repo_url!: string;
-}
-
-export class CreateJobDto {
-  @ApiProperty({
-    description: 'Stored job metadata for the queued job.',
-    type: () => CreateJobJobDto,
-  })
-  @IsDefined()
-  @ValidateNested()
-  @Type(() => CreateJobJobDto)
-  job!: CreateJobJobDto;
+  repo_url?: string;
 }
 
 export class StartJobDto {

@@ -32,7 +32,6 @@ Copy `.env.example` to `.env` and set at least:
 - `MONGO_URI`
 - `MONGO_DB`
 - `MONGO_LOGS_COLLECTION`
-- `RUNNER_IMAGE`
 - `HOST`
 - `PORT`
 - `PUBLIC_BASE_URL`
@@ -71,6 +70,8 @@ The API listens on `127.0.0.1:8000` by default. Override that with `HOST` and `P
 Set `PUBLIC_BASE_URL` to the externally reachable API origin used in generated job and artifact download URLs.
 
 Swagger UI is available at `http://127.0.0.1:8000/docs`.
+
+Each job create request must include a `docker_image_name` field; the API stores that value on the job record and uses it when the job starts.
 
 Job files and artifacts are stored under the repo-local `./storage/<jobId>/...` directory relative to the process working directory.
 Artifact download URLs are returned from authenticated `GET /jobs/<jobId>/artifacts`. The returned artifact download URLs are public signed URLs that require a valid `signature` query parameter generated with `PUBLIC_ARTIFACT_SECRET`.

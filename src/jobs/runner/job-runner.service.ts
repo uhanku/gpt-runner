@@ -4,31 +4,28 @@ import { chmodSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { JobLogsStore } from '../job-logs.store';
 import { JobPathsService } from '../storage/job-paths.service';
-import { JobStatusStore } from '../storage/job-status.store';
+import { JobStore } from '../storage/job-store';
 import { JobScriptBuilder } from './job-script.builder';
 import { StartJobDto } from '../dto/create-job.dto';
 
 @Injectable()
 export class JobRunnerService {
-  private readonly runnerImage =
-    process.env.RUNNER_IMAGE || 'gpt-runner:bookworm';
-
   constructor(
     private readonly paths: JobPathsService,
-    private readonly statuses: JobStatusStore,
+    private readonly statuses: JobStore,
     private readonly logs: JobLogsStore,
     private readonly scriptBuilder: JobScriptBuilder,
   ) {}
 
-  runJob(jobId: string, dto: StartJobDto) {
+  async runJob(jobId: string, dto: StartJobDto) {
     const timeoutSeconds = dto.timeout_seconds ?? 300;
     const network = dto.network ?? 'on';
     const root = dto.root ?? false;
 
-    const status = this.statuses.readStatus(jobId);
+    const status = await this.statuses.readJob(jobId);
     status.status = 'running';
     status.updated_at = this.nowIso();
-    this.statuses.writeStatus(jobId, status);
+    await this.statuses.writeJob(jobId, status);
 
     const scriptFile = path.join(this.paths.jobDir(jobId), 'run.sh');
     writeFileSync(scriptFile, this.scriptBuilder.safeScript(dto), 'utf8');
@@ -64,7 +61,7 @@ export class JobRunnerService {
       args.push('--cap-drop', 'ALL');
     }
 
-    args.push(this.runnerImage);
+    args.push(status.docker_image_name);
     args.push('bash', '/tmp/run.sh');
 
     this.appendLog(jobId, `$ docker ${args.join(' ')}\n\n`);
@@ -98,29 +95,45 @@ export class JobRunnerService {
       clearTimeout(timer);
       this.appendLog(jobId, `\n[gpt-runner] controller error: ${error}\n`);
 
-      const current = this.statuses.readStatus(jobId);
-      current.status = 'failed';
-      current.return_code = 999;
-      current.updated_at = this.nowIso();
-      this.statuses.writeStatus(jobId, current);
+      void this.statuses
+        .readJob(jobId)
+        .then((current) => {
+          current.status = 'failed';
+          current.return_code = 999;
+          current.updated_at = this.nowIso();
+          return this.statuses.writeJob(jobId, current);
+        })
+        .catch((persistError) => {
+          process.stderr.write(
+            `[gpt-runner] failed to persist job error state for ${jobId}: ${String(persistError)}\n`,
+          );
+        });
     });
 
     child.on('close', (code) => {
       clearTimeout(timer);
 
-      const current = this.statuses.readStatus(jobId);
-      current.return_code = code;
+      void this.statuses
+        .readJob(jobId)
+        .then((current) => {
+          current.return_code = code;
 
-      if (timedOut) {
-        current.status = 'timeout';
-      } else if (code === 0) {
-        current.status = 'success';
-      } else {
-        current.status = 'failed';
-      }
+          if (timedOut) {
+            current.status = 'timeout';
+          } else if (code === 0) {
+            current.status = 'success';
+          } else {
+            current.status = 'failed';
+          }
 
-      current.updated_at = this.nowIso();
-      this.statuses.writeStatus(jobId, current);
+          current.updated_at = this.nowIso();
+          return this.statuses.writeJob(jobId, current);
+        })
+        .catch((persistError) => {
+          process.stderr.write(
+            `[gpt-runner] failed to persist job close state for ${jobId}: ${String(persistError)}\n`,
+          );
+        });
     });
   }
 
