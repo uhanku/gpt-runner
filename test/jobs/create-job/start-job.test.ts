@@ -2,14 +2,16 @@ import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
 import { afterEach, beforeEach, describe, test } from 'node:test';
 import { ConflictException } from '@nestjs/common';
-import { StartJobDto } from '../../../src/jobs/dto/create-job.dto';
+import {
+  RunJobCommandsDto,
+  StartJobDto,
+} from '../../../src/jobs/dto/create-job.dto';
 import {
   createJobSpec,
   createJobStoreMock,
   createJobsService,
   createLogsStoreMock,
   createTempStorageRoot,
-  noopScheduler,
   TEST_DOCKER_IMAGE,
 } from './shared';
 
@@ -27,7 +29,7 @@ describe('JobsService.startJob', () => {
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  test('starts a queued job with dynamic commands', async () => {
+  test('boots a queued job workspace', async () => {
     const logsStore = createLogsStoreMock();
 
     let scheduled = false;
@@ -43,7 +45,7 @@ describe('JobsService.startJob', () => {
     const response = await service.startJob(
       job_id,
       {
-        commands: ['python3 --version'],
+        repo_url: 'https://github.com/pallets/flask.git',
       },
       'https://api.example.test',
     );
@@ -72,18 +74,22 @@ describe('JobsService.startJob', () => {
     }) as typeof setImmediate;
 
     const service = createJobsService(logsStore, storageRoot, scheduler);
-    const created = await service.createJob({
-      goal: 'Run the repository tests after cloning the repo.',
-      repo_url: 'https://github.com/pallets/flask.git',
-    }, TEST_DOCKER_IMAGE);
+    const created = await service.createJob(
+      {
+        goal: 'Run the repository tests after cloning the repo.',
+        repo_url: 'https://github.com/pallets/flask.git',
+      },
+      TEST_DOCKER_IMAGE,
+    );
 
-    const response = await service.startJob(created.job_id, {
-      commands: ['python3 --version'],
-    });
+    const response = await service.startJob(created.job_id, {});
 
     assert.equal(response.job_id, created.job_id);
     assert.equal(response.status, 'running');
-    assert.equal(response.goal, 'Run the repository tests after cloning the repo.');
+    assert.equal(
+      response.goal,
+      'Run the repository tests after cloning the repo.',
+    );
     assert.equal(response.repo_url, 'https://github.com/pallets/flask.git');
   });
 
@@ -121,7 +127,7 @@ describe('JobsService.startJob', () => {
       );
 
       const response = await stateService.startJob(job_id, {
-        commands: ['echo again'],
+        repo_url: 'https://github.com/example/queued.git',
       });
       assert.equal(response.status, 'running');
     }
@@ -140,36 +146,57 @@ describe('JobsService.startJob', () => {
     const jobStore = createJobStoreMock();
     const service = createJobsService(logsStore, storageRoot, scheduler, jobStore);
     const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
-    await service.startJob(job_id, { commands: ['python3 --version'] });
+    await service.startJob(job_id, {});
 
-    await assert.rejects(
-      () => service.startJob(job_id, { commands: ['node --version'] }),
-      ConflictException,
-    );
+    await assert.rejects(() => service.startJob(job_id, {}), ConflictException);
   });
 });
 
-describe('JobsService.safeScript', () => {
+describe('JobsService.bootstrapScript', () => {
+  test('clones the repo and installs workspace dependencies when present', () => {
+    const logsStore = createLogsStoreMock();
+    const service = createJobsService(logsStore);
+    const script = (service as unknown as {
+      bootstrapScript(dto: StartJobDto): string;
+    }).bootstrapScript({
+      repo_url: 'https://github.com/pallets/flask.git',
+    });
+
+    assert.match(
+      script,
+      /git clone 'https:\/\/github\.com\/pallets\/flask\.git' repo/,
+    );
+    assert.match(script, /cargo fetch/);
+    assert.match(script, /python -m pip install -e \./);
+    assert.doesNotMatch(script, /python -m pip install 'pytest<9'/);
+  });
+});
+
+describe('JobsService.commandsScript', () => {
   test('starts directly with commands when no repo URL is provided', () => {
     const logsStore = createLogsStoreMock();
     const service = createJobsService(logsStore);
     const script = (service as unknown as {
-      safeScript(dto: StartJobDto): string;
-    }).safeScript({
+      commandsScript(dto: RunJobCommandsDto): string;
+    }).commandsScript({
       commands: ['python3 --version', 'pytest'],
     });
 
     assert.doesNotMatch(script, /git clone/);
-    assert.doesNotMatch(script, /cd repo/);
-    assert.ok(script.indexOf("echo '[gpt-runner] running commands'") < script.indexOf('\npython3 --version'));
+    assert.match(script, /if \[ -d repo \]; then/);
+    assert.match(script, /\n  cd repo\n/);
+    assert.ok(
+      script.indexOf("echo '[gpt-runner] running commands'") <
+        script.indexOf('\npython3 --version'),
+    );
   });
 
   test('installs pytest in the job venv when the script runs pytest', () => {
     const logsStore = createLogsStoreMock();
     const service = createJobsService(logsStore);
     const script = (service as unknown as {
-      safeScript(dto: StartJobDto): string;
-    }).safeScript({
+      commandsScript(dto: RunJobCommandsDto): string;
+    }).commandsScript({
       commands: [
         'python3 --version',
         'python3 -m venv .venv',
@@ -177,10 +204,7 @@ describe('JobsService.safeScript', () => {
       ],
     });
 
-    assert.match(
-      script,
-      /python -m pip install 'pytest<9'/,
-    );
+    assert.match(script, /python -m pip install 'pytest<9'/);
     assert.match(
       script,
       /data = tomllib\.loads\(pyproject\.read_text\("utf8"\)\)/,
@@ -203,15 +227,12 @@ describe('JobsService.safeScript', () => {
     const logsStore = createLogsStoreMock();
     const service = createJobsService(logsStore);
     const script = (service as unknown as {
-      safeScript(dto: StartJobDto): string;
-    }).safeScript({
+      commandsScript(dto: RunJobCommandsDto): string;
+    }).commandsScript({
       commands: ['python3 --version', 'pytest'],
     });
 
-    assert.match(
-      script,
-      /python -m pip install 'pytest<9'/,
-    );
+    assert.match(script, /python -m pip install 'pytest<9'/);
     assert.ok(
       script.indexOf("python -m pip install 'pytest<9'") <
         script.indexOf('\npytest'),
@@ -222,14 +243,11 @@ describe('JobsService.safeScript', () => {
     const logsStore = createLogsStoreMock();
     const service = createJobsService(logsStore);
     const script = (service as unknown as {
-      safeScript(dto: StartJobDto): string;
-    }).safeScript({
+      commandsScript(dto: RunJobCommandsDto): string;
+    }).commandsScript({
       commands: ['python3 --version', 'echo done'],
     });
 
-    assert.doesNotMatch(
-      script,
-      /python -m pip install 'pytest<9'/,
-    );
+    assert.doesNotMatch(script, /python -m pip install 'pytest<9'/);
   });
 });

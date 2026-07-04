@@ -4,6 +4,7 @@ import { describe, test } from 'node:test';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import {
   CreateJobDto,
+  RunJobCommandsDto,
   StartJobDto,
   UploadJobFilesDto,
 } from '../../../src/jobs/dto/create-job.dto';
@@ -85,7 +86,7 @@ describe('StartJobDto', () => {
   test('accepts the documented payload and applies defaults', async () => {
     const result = await pipe.transform(
       {
-        commands: ['python3 --version'],
+        repo_url: 'https://github.com/pallets/flask.git',
       },
       {
         type: 'body',
@@ -94,7 +95,7 @@ describe('StartJobDto', () => {
     );
 
     assert.ok(result instanceof StartJobDto);
-    assert.deepEqual(result.commands, ['python3 --version']);
+    assert.equal(result.repo_url, 'https://github.com/pallets/flask.git');
     assert.equal(result.timeout_seconds, 300);
     assert.equal(result.network, 'on');
     assert.equal(result.root, false);
@@ -105,7 +106,6 @@ describe('StartJobDto', () => {
       {
         repo_url: 'https://github.com/pallets/flask.git',
         branch: 'main',
-        commands: ['pytest'],
         timeout_seconds: '120',
         network: 'off',
         root: true,
@@ -126,7 +126,6 @@ describe('StartJobDto', () => {
   test('coerces multipart-style boolean fields predictably', async () => {
     const result = await pipe.transform(
       {
-        commands: ['python3 --version'],
         root: 'false',
       },
       {
@@ -138,6 +137,50 @@ describe('StartJobDto', () => {
     assert.equal(result.root, false);
   });
 
+  test('rejects invalid bootstrap payloads', async () => {
+    const cases = [
+      {
+        payload: { repo_url: 123 },
+        message: 'repo_url should be a string when present',
+      },
+      {
+        payload: { branch: 123 },
+        message: 'branch should be a string when present',
+      },
+      {
+        payload: { timeout_seconds: 0 },
+        message: 'timeout_seconds should be at least 1',
+      },
+      {
+        payload: { timeout_seconds: 901 },
+        message: 'timeout_seconds should not exceed 900',
+      },
+      {
+        payload: { network: 'maybe' },
+        message: 'network should only allow on/off',
+      },
+    ];
+
+    for (const { payload, message } of cases) {
+      await assert.rejects(
+        () =>
+          pipe.transform(payload, {
+            type: 'body',
+            metatype: StartJobDto,
+          } as never),
+        BadRequestException,
+        message,
+      );
+    }
+  });
+});
+
+describe('RunJobCommandsDto', () => {
+  const pipe = new ValidationPipe({
+    transform: true,
+    whitelist: true,
+  });
+
   test('accepts multipart-style commands fields', async () => {
     const repeated = await pipe.transform(
       {
@@ -145,7 +188,7 @@ describe('StartJobDto', () => {
       },
       {
         type: 'body',
-        metatype: StartJobDto,
+        metatype: RunJobCommandsDto,
       } as never,
     );
 
@@ -155,7 +198,7 @@ describe('StartJobDto', () => {
       },
       {
         type: 'body',
-        metatype: StartJobDto,
+        metatype: RunJobCommandsDto,
       } as never,
     );
 
@@ -165,7 +208,7 @@ describe('StartJobDto', () => {
       },
       {
         type: 'body',
-        metatype: StartJobDto,
+        metatype: RunJobCommandsDto,
       } as never,
     );
 
@@ -206,7 +249,7 @@ describe('StartJobDto', () => {
         () =>
           pipe.transform(payload, {
             type: 'body',
-            metatype: StartJobDto,
+            metatype: RunJobCommandsDto,
           } as never),
         BadRequestException,
         message,

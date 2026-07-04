@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, test } from 'node:test';
 import { InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { StartJobDto } from '../../../src/jobs/dto/create-job.dto';
+import { RunJobCommandsDto } from '../../../src/jobs/dto/create-job.dto';
 import {
   createJobSpec,
   createJobsService,
@@ -112,8 +112,7 @@ describe('JobsService.listArtifacts', () => {
   test('returns a downloadable image URL for a SpriteFusion pixel snapper output', async () => {
     const logsStore = createLogsStoreMock();
 
-    const dto: StartJobDto = {
-      repo_url: 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
+    const dto: RunJobCommandsDto = {
       commands: [
         [
           'convert',
@@ -130,14 +129,13 @@ describe('JobsService.listArtifacts', () => {
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler);
     const script = (service as unknown as {
-      safeScript(dto: StartJobDto): string;
-    }).safeScript(dto);
+      commandsScript(dto: RunJobCommandsDto): string;
+    }).commandsScript(dto);
 
     assert.match(
       script,
-      /git clone 'https:\/\/github\.com\/Hugo-Dz\/spritefusion-pixel-snapper\.git' repo/,
+      /convert .*mixed-pixel-art\.png/,
     );
-    assert.match(script, /convert .*mixed-pixel-art\.png/);
     assert.match(
       script,
       /cargo run --release -- mixed-pixel-art\.png \/artifacts\/spritefusion-pixel-snapped\.png 4 --pixel-size 8/,

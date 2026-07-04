@@ -24,6 +24,7 @@ import type {} from 'multer';
 import { BearerAuthGuard } from './shared/bearer-auth.guard';
 import {
   CreateJobDto,
+  RunJobCommandsDto,
   StartJobDto,
   UploadJobFilesDto,
 } from './dto/create-job.dto';
@@ -188,11 +189,38 @@ export class JobsController {
     schema: {
       type: 'object',
       example: {
-        commands: ['ls -la', 'pytest'],
+        repo_url: 'https://github.com/pallets/flask.git',
+        branch: 'main',
       },
       properties: {
         repo_url: { type: 'string' },
         branch: { type: 'string' },
+        timeout_seconds: { type: 'integer', default: 300, maximum: 900 },
+        network: { type: 'string', enum: ['on', 'off'], default: 'on' },
+        root: { type: 'boolean', default: false },
+      },
+    },
+  })
+  startJob(
+    @Param('jobId') jobId: string,
+    @Body() dto: StartJobDto,
+    @Req() request: Request,
+  ) {
+    return this.jobsService.startJob(
+      jobId,
+      dto,
+      this.requestOrigin(request),
+    );
+  }
+
+  @Post(':jobId/commands')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      example: {
+        commands: ['ls -la', 'pytest'],
+      },
+      properties: {
         commands: {
           oneOf: [
             {
@@ -204,7 +232,7 @@ export class JobsController {
               description: 'JSON string array for multipart clients.',
             },
           ],
-          description: 'Shell commands to run inside the container.',
+          description: 'Shell commands to run inside the prepared workspace.',
         },
         timeout_seconds: { type: 'integer', default: 300, maximum: 900 },
         network: { type: 'string', enum: ['on', 'off'], default: 'on' },
@@ -213,12 +241,12 @@ export class JobsController {
       required: ['commands'],
     },
   })
-  startJob(
+  runCommands(
     @Param('jobId') jobId: string,
-    @Body() dto: StartJobDto,
+    @Body() dto: RunJobCommandsDto,
     @Req() request: Request,
   ) {
-    return this.jobsService.startJob(
+    return this.jobsService.runCommands(
       jobId,
       dto,
       this.requestOrigin(request),

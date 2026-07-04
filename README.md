@@ -73,6 +73,8 @@ Swagger UI is available at `http://127.0.0.1:8000/docs`.
 
 Each job create request must include a `docker_image_name` field; the API stores that value on the job record and uses it when the job starts.
 
+Use `POST /jobs/<jobId>/start` to pull the job repository and bootstrap workspace dependencies. Use `POST /jobs/<jobId>/commands` to run the actual job commands inside that prepared workspace.
+
 Job files and artifacts are stored under the repo-local `./storage/<jobId>/...` directory relative to the process working directory.
 Artifact download URLs are returned from authenticated `GET /jobs/<jobId>/artifacts`. The returned artifact download URLs are public signed URLs that require a valid `signature` query parameter generated with `PUBLIC_ARTIFACT_SECRET`.
 
@@ -82,6 +84,7 @@ Artifact download URLs are returned from authenticated `GET /jobs/<jobId>/artifa
 flowchart TD
     A[Custom GPT Action] --> B[NestJS REST API]
     B --> C[Temporary Docker container]
-    C --> D[Run commands<br/>Clone repos<br/>Install packages<br/>Test code<br/>Process files]
-    D --> E[Return logs and artifacts to the GPT]
+    C --> D[POST /jobs/<jobId>/start<br/>Pull repo<br/>Install workspace dependencies]
+    D --> E[POST /jobs/<jobId>/commands<br/>Run commands<br/>Test code<br/>Process files]
+    E --> F[Return logs and artifacts to the GPT]
 ```

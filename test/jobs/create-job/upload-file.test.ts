@@ -246,7 +246,7 @@ describe('JobsService.uploadFile', () => {
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler);
     const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
-    await service.startJob(job_id, { commands: ['python3 --version'] });
+    await service.startJob(job_id, {});
 
     await assert.rejects(
       () =>

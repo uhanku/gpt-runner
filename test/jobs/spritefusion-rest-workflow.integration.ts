@@ -168,7 +168,33 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
           'content-type': 'application/json',
         },
         body: JSON.stringify({
-          repo_url: 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
+          timeout_seconds: 900,
+          network: 'on',
+        }),
+      },
+    );
+
+    assert.equal(started.job_id, created.job_id);
+    assert.equal(started.status, 'running');
+
+    const bootstrapped = await waitForTerminalStatus(
+      `${baseUrl}/jobs/${created.job_id}`,
+    );
+    assert.equal(
+      bootstrapped.status,
+      'success',
+      `expected SpriteFusion bootstrap to succeed; logs tail:\n${bootstrapped.logs_tail ?? ''}`,
+    );
+
+    const commandStarted = await requestJson<JobEnvelope>(
+      `${baseUrl}/jobs/${created.job_id}/commands`,
+      {
+        method: 'POST',
+        headers: {
+          ...authHeaders(),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
           commands: [
             'export RUSTUP_INIT_SKIP_PATH_CHECK=yes',
             'curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal',
@@ -181,8 +207,8 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
       },
     );
 
-    assert.equal(started.job_id, created.job_id);
-    assert.equal(started.status, 'running');
+    assert.equal(commandStarted.job_id, created.job_id);
+    assert.equal(commandStarted.status, 'running');
 
     const finalStatus = await waitForTerminalStatus(
       `${baseUrl}/jobs/${created.job_id}`,

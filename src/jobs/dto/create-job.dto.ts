@@ -150,58 +150,7 @@ export class CreateJobDto {
   repo_url?: string;
 }
 
-export class StartJobDto {
-  @ApiPropertyOptional({
-    description: 'Optional git repository URL to clone before running commands.',
-    example: 'https://github.com/pallets/flask.git',
-  })
-  @IsOptional()
-  @IsString()
-  repo_url?: string;
-
-  @ApiPropertyOptional({
-    description: 'Optional branch, tag, or ref to clone.',
-    example: 'main',
-  })
-  @IsOptional()
-  @IsString()
-  branch?: string;
-
-  @ApiProperty({
-    description: 'Shell commands to run inside the temporary container.',
-    example: [
-      'python3 --version',
-      'python3 -m venv .venv',
-      '. .venv/bin/activate && pip install -e .',
-      '. .venv/bin/activate && pytest',
-    ],
-  })
-  @Transform(({ value }) => {
-    if (Array.isArray(value)) {
-      return value;
-    }
-
-    if (typeof value !== 'string') {
-      return value;
-    }
-
-    const trimmed = value.trim();
-    if (trimmed.startsWith('[')) {
-      try {
-        return JSON.parse(trimmed);
-      } catch {
-        return value;
-      }
-    }
-
-    return [value];
-  })
-  @IsArray()
-  @ArrayMinSize(1)
-  @ArrayMaxSize(20)
-  @IsString({ each: true })
-  commands!: string[];
-
+class JobExecutionOptionsDto {
   @ApiPropertyOptional({
     description: 'Maximum runtime in seconds.',
     default: 300,
@@ -242,6 +191,56 @@ export class StartJobDto {
   })
   @IsBoolean()
   root?: boolean = false;
+}
+
+export class StartJobDto extends JobExecutionOptionsDto {
+  @ApiPropertyOptional({
+    description: 'Optional git repository URL to clone before installing dependencies.',
+    example: 'https://github.com/pallets/flask.git',
+  })
+  @IsOptional()
+  @IsString()
+  repo_url?: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional branch, tag, or ref to clone.',
+    example: 'main',
+  })
+  @IsOptional()
+  @IsString()
+  branch?: string;
+}
+
+export class RunJobCommandsDto extends JobExecutionOptionsDto {
+  @ApiProperty({
+    description: 'Shell commands to run inside the prepared workspace.',
+    example: ['python3 --version', 'pytest'],
+  })
+  @Transform(({ value }) => {
+    if (Array.isArray(value)) {
+      return value;
+    }
+
+    if (typeof value !== 'string') {
+      return value;
+    }
+
+    const trimmed = value.trim();
+    if (trimmed.startsWith('[')) {
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        return value;
+      }
+    }
+
+    return [value];
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  commands!: string[];
 }
 
 export class UploadJobFilesDto {

@@ -4,10 +4,25 @@ import { describe, test } from 'node:test';
 import { JobsController } from '../../../src/jobs/jobs.controller';
 
 describe('Swagger docs', () => {
-  test('documents a commands-only start-job request body example', async () => {
+  test('documents the bootstrap start-job request body example', async () => {
     const metadata = Reflect.getMetadata(
       'swagger/apiParameters',
       JobsController.prototype.startJob,
+    ) as Array<{ in?: string; schema?: { example?: unknown } }>;
+
+    const bodyMetadata = metadata?.find((entry) => entry.in === 'body');
+
+    assert.ok(bodyMetadata);
+    assert.deepEqual(bodyMetadata?.schema?.example, {
+      repo_url: 'https://github.com/pallets/flask.git',
+      branch: 'main',
+    });
+  });
+
+  test('documents the commands execution request body example', async () => {
+    const metadata = Reflect.getMetadata(
+      'swagger/apiParameters',
+      JobsController.prototype.runCommands,
     ) as Array<{ in?: string; schema?: { example?: unknown } }>;
 
     const bodyMetadata = metadata?.find((entry) => entry.in === 'body');

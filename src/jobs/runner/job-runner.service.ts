@@ -6,7 +6,7 @@ import { JobLogsStore } from '../shared/job-logs.store';
 import { JobPathsService } from '../storage/job-paths.service';
 import { JobStore } from '../storage/job-store';
 import { JobScriptBuilder } from './job-script.builder';
-import { StartJobDto } from '../dto/create-job.dto';
+import { RunJobCommandsDto, StartJobDto } from '../dto/create-job.dto';
 
 @Injectable()
 export class JobRunnerService {
@@ -17,7 +17,22 @@ export class JobRunnerService {
     private readonly scriptBuilder: JobScriptBuilder,
   ) {}
 
-  async runJob(jobId: string, dto: StartJobDto) {
+  async runBootstrap(jobId: string, dto: StartJobDto) {
+    const script = this.scriptBuilder.bootstrapScript(dto);
+    await this.runJob(jobId, script, dto, 'bootstrap');
+  }
+
+  async runCommands(jobId: string, dto: RunJobCommandsDto) {
+    const script = this.scriptBuilder.commandsScript(dto);
+    await this.runJob(jobId, script, dto, 'commands');
+  }
+
+  private async runJob(
+    jobId: string,
+    script: string,
+    dto: StartJobDto | RunJobCommandsDto,
+    phase: 'bootstrap' | 'commands',
+  ) {
     const timeoutSeconds = dto.timeout_seconds ?? 300;
     const network = dto.network ?? 'on';
     const root = dto.root ?? false;
@@ -28,7 +43,7 @@ export class JobRunnerService {
     await this.statuses.writeJob(jobId, status);
 
     const scriptFile = path.join(this.paths.jobDir(jobId), 'run.sh');
-    writeFileSync(scriptFile, this.scriptBuilder.safeScript(dto), 'utf8');
+    writeFileSync(scriptFile, script, 'utf8');
     chmodSync(scriptFile, 0o644);
 
     const containerName = `gpt-job-${jobId}`;
@@ -93,7 +108,10 @@ export class JobRunnerService {
 
     child.on('error', (error) => {
       clearTimeout(timer);
-      this.appendLog(jobId, `\n[gpt-runner] controller error: ${error}\n`);
+      this.appendLog(
+        jobId,
+        `\n[gpt-runner] ${phase} controller error: ${error}\n`,
+      );
 
       void this.statuses
         .readJob(jobId)
@@ -105,7 +123,7 @@ export class JobRunnerService {
         })
         .catch((persistError) => {
           process.stderr.write(
-            `[gpt-runner] failed to persist job error state for ${jobId}: ${String(persistError)}\n`,
+            `[gpt-runner] failed to persist ${phase} job error state for ${jobId}: ${String(persistError)}\n`,
           );
         });
     });
@@ -131,7 +149,7 @@ export class JobRunnerService {
         })
         .catch((persistError) => {
           process.stderr.write(
-            `[gpt-runner] failed to persist job close state for ${jobId}: ${String(persistError)}\n`,
+            `[gpt-runner] failed to persist ${phase} job close state for ${jobId}: ${String(persistError)}\n`,
           );
         });
     });

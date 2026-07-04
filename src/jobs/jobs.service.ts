@@ -7,7 +7,11 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { existsSync, rmSync } from 'node:fs';
-import { StartJobDto, UploadJobFilesDto } from './dto/create-job.dto';
+import {
+  RunJobCommandsDto,
+  StartJobDto,
+  UploadJobFilesDto,
+} from './dto/create-job.dto';
 import { JobLogsStore, RecentJobLogEntry } from './shared/job-logs.store';
 import {
   JOB_FILE_FETCH,
@@ -141,15 +145,53 @@ export class JobsService {
       throw new ConflictException('Job is already running');
     }
 
+    if (dto.repo_url) {
+      status.repo_url = dto.repo_url;
+    }
+
     status.status = 'running';
     status.return_code = null;
     status.updated_at = this.nowIso();
     await this.statuses.writeJob(jobId, status);
 
     this.scheduleImmediate(() => {
-      void this.runner.runJob(jobId, dto).catch((error) => {
+      void this.runner.runBootstrap(jobId, dto).catch((error) => {
         process.stderr.write(
-          `[gpt-runner] failed to start job ${jobId}: ${String(error)}\n`,
+          `[gpt-runner] failed to bootstrap job ${jobId}: ${String(error)}\n`,
+        );
+      });
+    });
+
+    return this.jobEnvelope(
+      jobId,
+      'running',
+      this.urls.publicBaseUrl(fallbackBaseUrl),
+      {
+        goal: status.goal,
+        ...(status.repo_url !== undefined ? { repo_url: status.repo_url } : {}),
+      },
+    );
+  }
+
+  async runCommands(
+    jobId: string,
+    dto: RunJobCommandsDto,
+    fallbackBaseUrl?: string,
+  ) {
+    const status = await this.statuses.readJob(jobId);
+    if (status.status === 'running') {
+      throw new ConflictException('Job is already running');
+    }
+
+    status.status = 'running';
+    status.return_code = null;
+    status.updated_at = this.nowIso();
+    await this.statuses.writeJob(jobId, status);
+
+    this.scheduleImmediate(() => {
+      void this.runner.runCommands(jobId, dto).catch((error) => {
+        process.stderr.write(
+          `[gpt-runner] failed to run commands for job ${jobId}: ${String(error)}\n`,
         );
       });
     });
@@ -181,7 +223,15 @@ export class JobsService {
     return this.artifacts.getArtifactFile(jobId, artifactPath, signature);
   }
 
-  safeScript(dto: StartJobDto): string {
+  bootstrapScript(dto: StartJobDto): string {
+    return this.scriptBuilder.bootstrapScript(dto);
+  }
+
+  commandsScript(dto: RunJobCommandsDto): string {
+    return this.scriptBuilder.commandsScript(dto);
+  }
+
+  safeScript(dto: RunJobCommandsDto): string {
     return this.scriptBuilder.safeScript(dto);
   }
 
