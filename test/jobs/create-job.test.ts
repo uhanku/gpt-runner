@@ -28,8 +28,8 @@ import {
   UploadJobFilesDto,
 } from '../../src/jobs/dto/create-job.dto';
 import { JobsService } from '../../src/jobs/jobs.service';
-import { JobLogsStore } from '../../src/jobs/job-logs.store';
-import type { JobStatus } from '../../src/jobs/job.types';
+import { JobLogsStore } from '../../src/jobs/shared/job-logs.store';
+import type { JobStatus } from '../../src/jobs/shared/job.types';
 
 const TEST_DOCKER_IMAGE = 'gpt-runner:test-image';
 const noopScheduler = (() => {

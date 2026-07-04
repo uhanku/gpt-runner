@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { spawn } from 'node:child_process';
 import { chmodSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { JobLogsStore } from '../job-logs.store';
+import { JobLogsStore } from '../shared/job-logs.store';
 import { JobPathsService } from '../storage/job-paths.service';
 import { JobStore } from '../storage/job-store';
 import { JobScriptBuilder } from './job-script.builder';

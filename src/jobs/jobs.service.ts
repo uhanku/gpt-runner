@@ -8,14 +8,14 @@ import {
 import { randomUUID } from 'node:crypto';
 import { existsSync, rmSync } from 'node:fs';
 import { StartJobDto, UploadJobFilesDto } from './dto/create-job.dto';
-import { JobLogsStore, RecentJobLogEntry } from './job-logs.store';
+import { JobLogsStore, RecentJobLogEntry } from './shared/job-logs.store';
 import {
   JOB_FILE_FETCH,
   JOB_SCHEDULE_IMMEDIATE,
   JOB_STORAGE_ROOT,
   type FileFetch,
-} from './job.tokens';
-import type { JobSpec, JobState, JobStatus, JobSummary } from './job.types';
+} from './shared/job.tokens';
+import type { JobSpec, JobState, JobStatus, JobSummary } from './shared/job.types';
 import { JobArtifactsService } from './artifacts/job-artifacts.service';
 import { ArtifactSignerService } from './artifacts/artifact-signer.service';
 import { JobFilesService } from './files/job-files.service';
@@ -243,11 +243,11 @@ export {
   JOB_FILE_FETCH,
   JOB_SCHEDULE_IMMEDIATE,
   JOB_STORAGE_ROOT,
-} from './job.tokens';
+} from './shared/job.tokens';
 export type {
   JobSpec,
   JobState,
   JobStatus,
   JobSummary,
   ReferencedFile,
-} from './job.types';
+} from './shared/job.types';

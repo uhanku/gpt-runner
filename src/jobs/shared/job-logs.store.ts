@@ -9,7 +9,7 @@ import {
   JOB_LOG_MODEL_NAME,
   JobLogDocument,
   jobLogSchema,
-} from './schemas/job-log.schema';
+} from '../schemas/job-log.schema';
 
 export interface RecentJobLogEntry {
   job_id: string;

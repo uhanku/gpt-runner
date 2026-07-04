@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, test } from 'node:test';
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../../src/app.module';
-import { JobLogsStore } from '../../src/jobs/job-logs.store';
+import { JobLogsStore } from '../../src/jobs/shared/job-logs.store';
 
 interface JobEnvelope {
   job_id: string;

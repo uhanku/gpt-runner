@@ -1,5 +1,5 @@
 import { Schema } from 'mongoose';
-import type { JobState, JobSpec } from '../job.types';
+import type { JobState, JobSpec } from '../shared/job.types';
 
 export interface JobDocument {
   job_id: string;

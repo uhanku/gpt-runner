@@ -21,15 +21,15 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import type {} from 'multer';
-import { BearerAuthGuard } from './bearer-auth.guard';
+import { BearerAuthGuard } from './shared/bearer-auth.guard';
 import {
   CreateJobDto,
   StartJobDto,
   UploadJobFilesDto,
 } from './dto/create-job.dto';
 import { JobsService } from './jobs.service';
-import { PublicRoute } from './public-route.decorator';
-import { UploadRequestBodyLoggerInterceptor } from './upload-request-body-logger.interceptor';
+import { PublicRoute } from './shared/public-route.decorator';
+import { UploadRequestBodyLoggerInterceptor } from './shared/upload-request-body-logger.interceptor';
 
 @ApiTags('jobs')
 @ApiBearerAuth('bearer')

@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import mongoose, { Connection, Model } from 'mongoose';
 import { JOB_MODEL_NAME, jobSchema, type JobDocument } from '../schemas/job.schema';
-import type { JobStatus, JobSummary } from '../job.types';
+import type { JobStatus, JobSummary } from '../shared/job.types';
 
 @Injectable()
 export class JobStore {

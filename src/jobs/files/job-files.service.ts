@@ -7,13 +7,10 @@ import {
 } from '@nestjs/common';
 import { chmodSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import {
-  JOB_FILE_FETCH,
-  type FileFetch,
-} from '../job.tokens';
+import { JOB_FILE_FETCH, type FileFetch } from '../shared/job.tokens';
 import { JobPathsService } from '../storage/job-paths.service';
 import { JobStore } from '../storage/job-store';
-import type { ReferencedFile } from '../job.types';
+import type { ReferencedFile } from '../shared/job.types';
 import {
   type OpenAiFileIdRefDto,
   UploadJobFilesDto,

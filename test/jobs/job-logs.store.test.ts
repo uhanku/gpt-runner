@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { afterEach, describe, test } from 'node:test';
 import mongoose from 'mongoose';
-import { JobLogsStore } from '../../src/jobs/job-logs.store';
+import { JobLogsStore } from '../../src/jobs/shared/job-logs.store';
 
 type LogEntry = {
   job_id: string;

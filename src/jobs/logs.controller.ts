@@ -1,6 +1,6 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import { BearerAuthGuard } from './bearer-auth.guard';
+import { BearerAuthGuard } from './shared/bearer-auth.guard';
 import { JobsService } from './jobs.service';
 
 @ApiTags('logs')

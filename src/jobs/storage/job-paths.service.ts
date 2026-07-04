@@ -11,7 +11,7 @@ import {
   statSync,
 } from 'node:fs';
 import path from 'node:path';
-import { JOB_STORAGE_ROOT } from '../job.tokens';
+import { JOB_STORAGE_ROOT } from '../shared/job.tokens';
 
 @Injectable()
 export class JobPathsService {
