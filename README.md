@@ -48,19 +48,13 @@ cp .env.example .env
 docker compose up -d mongo
 ```
 
-### 4. Build the runner image
-
-```bash
-docker build -t gpt-runner:bookworm ./runner
-```
-
-### 5. Build the API
+### 4. Build the API
 
 ```bash
 npm run build
 ```
 
-### 6. Start the API
+### 5. Start the API
 
 ```bash
 npm start
@@ -75,6 +69,18 @@ Each job create request must include a `docker_image_name` field; the API stores
 
 Use `POST /jobs/<jobId>/start` to pull the job repository and bootstrap workspace dependencies. Use `POST /jobs/<jobId>/commands` to run the actual job commands inside that prepared workspace.
 
+## Test Setup
+
+Seed the available docker image catalog used by tests and local fixtures:
+
+```bash
+npm run seed:available-images
+```
+
+This inserts the `runner/Dockerfile.spritefusion` entry with the goal `remove pixel art mixels from ai and scale that image`.
+
+Running `npm run test` also seeds the available docker image catalog before the test suite starts.
+
 Job files and artifacts are stored under the repo-local `./storage/<jobId>/...` directory relative to the process working directory.
 Artifact download URLs are returned from authenticated `GET /jobs/<jobId>/artifacts`. The returned artifact download URLs are public signed URLs that require a valid `signature` query parameter generated with `PUBLIC_ARTIFACT_SECRET`.
 
@@ -83,7 +89,7 @@ Artifact download URLs are returned from authenticated `GET /jobs/<jobId>/artifa
 ```mermaid
 flowchart TD
     A[Custom GPT Action] --> B[NestJS REST API]
-    B --> C[Temporary Docker container]
+    B --> C[Runner container]
     C --> D[POST /jobs/<jobId>/start<br/>Pull repo<br/>Install workspace dependencies]
     D --> E[POST /jobs/<jobId>/commands<br/>Run commands<br/>Test code<br/>Process files]
     E --> F[Return logs and artifacts to the GPT]
