@@ -74,16 +74,16 @@ describe('AvailableDockerImagesStore', () => {
     (store as unknown as { imageModel: typeof model }).imageModel = model;
 
     await store.upsert({
-      name: 'runner/Dockerfile.spritefusion',
+      name: 'images/Dockerfile.spritefusion',
       goal: 'remove pixel art mixels from ai and scale that image',
     });
 
     assert.deepEqual(model.state.updates, [
       {
-        filter: { name: 'runner/Dockerfile.spritefusion' },
+        filter: { name: 'images/Dockerfile.spritefusion' },
         update: {
           $set: {
-            name: 'runner/Dockerfile.spritefusion',
+            name: 'images/Dockerfile.spritefusion',
             goal: 'remove pixel art mixels from ai and scale that image',
           },
         },

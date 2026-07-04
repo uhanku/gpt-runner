@@ -4,7 +4,7 @@ import type { AvailableDockerImageDocument } from '../jobs/schemas/available-doc
 
 export const AVAILABLE_DOCKER_IMAGE_SEEDS: AvailableDockerImageDocument[] = [
   {
-    name: 'runner/Dockerfile.spritefusion',
+    name: 'images/Dockerfile.spritefusion',
     goal: 'remove pixel art mixels from ai and scale that image',
   },
 ];

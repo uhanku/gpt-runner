@@ -374,7 +374,7 @@ function dockerUnavailableReason() {
       stdio: 'ignore',
     });
   } catch {
-    return `Runner image ${runnerImage} is missing; build it with: docker build -t ${runnerImage} ./runner`;
+    return `Runner image ${runnerImage} is missing; build it with: docker build -t ${runnerImage} ./images`;
   }
 
   return '';
