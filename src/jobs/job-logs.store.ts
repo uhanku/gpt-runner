@@ -1,11 +1,15 @@
-import { Injectable, InternalServerErrorException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { Collection, MongoClient } from 'mongodb';
-
-interface JobLogEntry {
-  job_id: string;
-  text: string;
-  created_at: Date;
-}
+import {
+  Injectable,
+  InternalServerErrorException,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
+import mongoose, { Connection, Model } from 'mongoose';
+import {
+  JOB_LOG_MODEL_NAME,
+  JobLogDocument,
+  jobLogSchema,
+} from './schemas/job-log.schema';
 
 export interface RecentJobLogEntry {
   job_id: string;
@@ -15,40 +19,37 @@ export interface RecentJobLogEntry {
 
 @Injectable()
 export class JobLogsStore implements OnModuleInit, OnModuleDestroy {
-  private readonly client: MongoClient;
+  private readonly uri: string;
   private readonly databaseName: string;
   private readonly collectionName: string;
-  private collection?: Collection<JobLogEntry>;
-  private readonly inMemoryLogs = new Map<string, JobLogEntry[]>();
+  private connection?: Connection;
+  private logModel?: Model<JobLogDocument>;
 
   constructor() {
-    const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017';
+    this.uri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017';
     this.databaseName = process.env.MONGO_DB || 'gpt_runner';
     this.collectionName = process.env.MONGO_LOGS_COLLECTION || 'job_logs';
-    this.client = new MongoClient(mongoUri, {
-      serverSelectionTimeoutMS: 5000,
-    });
   }
 
   async onModuleInit() {
-    try {
-      await this.client.connect();
-      this.collection = this.client
-        .db(this.databaseName)
-        .collection<JobLogEntry>(this.collectionName);
+    const connection = mongoose.createConnection(this.uri, {
+      dbName: this.databaseName,
+      serverSelectionTimeoutMS: 5000,
+    });
 
-      await this.collection.createIndex({ job_id: 1, created_at: -1 });
-    } catch (error) {
-      this.collection = undefined;
-      process.stderr.write(
-        `[gpt-runner] Mongo log store unavailable, using in-memory fallback: ${String(error)}\n`,
-      );
-    }
+    this.connection = await connection.asPromise();
+    this.logModel = this.connection.model<JobLogDocument>(
+      JOB_LOG_MODEL_NAME,
+      jobLogSchema,
+      this.collectionName,
+    );
+
+    await this.logModel.init();
   }
 
   async onModuleDestroy() {
-    if (this.collection) {
-      await this.client.close();
+    if (this.connection) {
+      await this.connection.close();
     }
   }
 
@@ -57,18 +58,7 @@ export class JobLogsStore implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    if (!this.collection) {
-      const entries = this.inMemoryLogs.get(jobId) ?? [];
-      entries.push({
-        job_id: jobId,
-        text,
-        created_at: new Date(),
-      });
-      this.inMemoryLogs.set(jobId, entries);
-      return;
-    }
-
-    await this.logsCollection().insertOne({
+    await this.logsModel().create({
       job_id: jobId,
       text,
       created_at: new Date(),
@@ -80,33 +70,10 @@ export class JobLogsStore implements OnModuleInit, OnModuleDestroy {
       return '';
     }
 
-    if (!this.collection) {
-      const entries = this.inMemoryLogs.get(jobId) ?? [];
-      const chunks: string[] = [];
-      let collectedBytes = 0;
-
-      for (const entry of [...entries].reverse()) {
-        chunks.push(entry.text);
-        collectedBytes += Buffer.byteLength(entry.text, 'utf8');
-
-        if (collectedBytes >= maxBytes) {
-          break;
-        }
-      }
-
-      if (chunks.length === 0) {
-        return '';
-      }
-
-      const buffer = Buffer.from(chunks.reverse().join(''), 'utf8');
-      return buffer.length > maxBytes
-        ? buffer.subarray(buffer.length - maxBytes).toString('utf8')
-        : buffer.toString('utf8');
-    }
-
-    const cursor = this.logsCollection()
-      .find({ job_id: jobId }, { projection: { text: 1 } })
-      .sort({ created_at: -1, _id: -1 });
+    const cursor = this.logsModel()
+      .find({ job_id: jobId }, { text: 1, _id: 0 })
+      .sort({ created_at: -1, _id: -1 })
+      .cursor();
 
     const chunks: string[] = [];
     let collectedBytes = 0;
@@ -131,12 +98,7 @@ export class JobLogsStore implements OnModuleInit, OnModuleDestroy {
   }
 
   async deleteByJobId(jobId: string) {
-    if (!this.collection) {
-      this.inMemoryLogs.delete(jobId);
-      return;
-    }
-
-    await this.logsCollection().deleteMany({ job_id: jobId });
+    await this.logsModel().deleteMany({ job_id: jobId });
   }
 
   async recent(limit = 50): Promise<RecentJobLogEntry[]> {
@@ -144,23 +106,11 @@ export class JobLogsStore implements OnModuleInit, OnModuleDestroy {
       return [];
     }
 
-    if (!this.collection) {
-      const entries = [...this.inMemoryLogs.values()]
-        .flat()
-        .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
-        .slice(0, limit);
-
-      return entries.map((entry) => ({
-        job_id: entry.job_id,
-        text: entry.text,
-        created_at: entry.created_at.toISOString(),
-      }));
-    }
-
-    const cursor = this.logsCollection()
-      .find({}, { projection: { job_id: 1, text: 1, created_at: 1 } })
+    const cursor = this.logsModel()
+      .find({}, { job_id: 1, text: 1, created_at: 1, _id: 0 })
       .sort({ created_at: -1, _id: -1 })
-      .limit(limit);
+      .limit(limit)
+      .cursor();
 
     const entries: RecentJobLogEntry[] = [];
 
@@ -175,11 +125,11 @@ export class JobLogsStore implements OnModuleInit, OnModuleDestroy {
     return entries;
   }
 
-  private logsCollection(): Collection<JobLogEntry> {
-    if (!this.collection) {
+  private logsModel(): Model<JobLogDocument> {
+    if (!this.logModel) {
       throw new InternalServerErrorException('Mongo log store is not ready.');
     }
 
-    return this.collection;
+    return this.logModel;
   }
 }
