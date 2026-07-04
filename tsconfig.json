@@ -6,7 +6,7 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    "types": ["node"],
+    "types": ["node", "express", "multer"],
     "target": "ES2022",
     "sourceMap": true,
     "rootDir": "./src",

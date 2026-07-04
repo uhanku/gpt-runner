@@ -1,0 +1,73 @@
+import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, test } from 'node:test';
+import { rmSync } from 'node:fs';
+import { createJobStoreMock, createJobsService, createLogsStoreMock, createTempStorageRoot, noopScheduler, TEST_DOCKER_IMAGE } from './shared';
+
+describe('JobsService.listJobs', () => {
+  let tempRoot: string;
+  let storageRoot: string;
+
+  beforeEach(() => {
+    const temp = createTempStorageRoot('gpt-runner-jobs-');
+    tempRoot = temp.tempRoot;
+    storageRoot = temp.storageRoot;
+    rmSync(storageRoot, { recursive: true, force: true });
+  });
+
+  afterEach(() => {
+    rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  test('returns summaries for persisted jobs and ignores unrelated paths', async () => {
+    const logsStore = createLogsStoreMock();
+
+    const jobStore = createJobStoreMock([
+      {
+        job_id: 'job-older',
+        goal: 'Inspect the older job.',
+        repo_url: 'https://github.com/example/older.git',
+        status: 'success',
+        created_at: '2026-01-01T10:00:00.000Z',
+        updated_at: '2026-01-01T10:05:00.000Z',
+        return_code: 0,
+        docker_image_name: TEST_DOCKER_IMAGE,
+      },
+      {
+        job_id: 'job-newer',
+        goal: 'Inspect the newer job.',
+        repo_url: 'https://github.com/example/newer.git',
+        status: 'running',
+        created_at: '2026-01-02T10:00:00.000Z',
+        updated_at: '2026-01-02T10:30:00.000Z',
+        return_code: null,
+        docker_image_name: TEST_DOCKER_IMAGE,
+      },
+    ]);
+    const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
+
+    const jobs = await service.listJobs();
+
+    assert.deepEqual(jobs, [
+      {
+        job_id: 'job-newer',
+        goal: 'Inspect the newer job.',
+        repo_url: 'https://github.com/example/newer.git',
+        docker_image_name: TEST_DOCKER_IMAGE,
+        status: 'running',
+        created_at: '2026-01-02T10:00:00.000Z',
+        updated_at: '2026-01-02T10:30:00.000Z',
+        return_code: null,
+      },
+      {
+        job_id: 'job-older',
+        goal: 'Inspect the older job.',
+        repo_url: 'https://github.com/example/older.git',
+        docker_image_name: TEST_DOCKER_IMAGE,
+        status: 'success',
+        created_at: '2026-01-01T10:00:00.000Z',
+        updated_at: '2026-01-01T10:05:00.000Z',
+        return_code: 0,
+      },
+    ]);
+  });
+});
