@@ -795,6 +795,28 @@ describe('JobsService.startJob', () => {
 });
 
 describe('JobsService.safeScript', () => {
+  test('starts directly with commands when no repo URL is provided', () => {
+    const logsStore = {
+      append: async () => undefined,
+      tail: async () => '',
+      deleteByJobId: async () => undefined,
+      recent: async () => [],
+      onModuleInit: async () => undefined,
+      onModuleDestroy: async () => undefined,
+    } as unknown as JobLogsStore;
+
+    const service = createJobsService(logsStore);
+    const script = (service as unknown as {
+      safeScript(dto: StartJobDto): string;
+    }).safeScript({
+      commands: ['python3 --version', 'pytest'],
+    });
+
+    assert.doesNotMatch(script, /git clone/);
+    assert.doesNotMatch(script, /cd repo/);
+    assert.ok(script.indexOf("echo '[gpt-runner] running commands'") < script.indexOf('\npython3 --version'));
+  });
+
   test('installs pytest in the job venv when the script runs pytest', () => {
     const logsStore = {
       append: async () => undefined,
@@ -1456,7 +1478,7 @@ describe('JobsService.listArtifacts', () => {
 });
 
 describe('Swagger docs', () => {
-  test('prefills the SpriteFusion repo workflow on the start-job request body', async () => {
+  test('documents a commands-only start-job request body example', async () => {
     const metadata = Reflect.getMetadata(
       'swagger/apiParameters',
       JobsController.prototype.startJob,
@@ -1466,8 +1488,7 @@ describe('Swagger docs', () => {
 
     assert.ok(bodyMetadata);
     assert.deepEqual(bodyMetadata?.schema?.example, {
-      repo_url: 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
-      commands: ['ls -la'],
+      commands: ['ls -la', 'pytest'],
     });
   });
 

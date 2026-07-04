@@ -188,8 +188,7 @@ export class JobsController {
     schema: {
       type: 'object',
       example: {
-        repo_url: 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
-        commands: ['ls -la'],
+        commands: ['ls -la', 'pytest'],
       },
       properties: {
         repo_url: { type: 'string' },
