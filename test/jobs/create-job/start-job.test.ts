@@ -59,6 +59,36 @@ describe('JobsService.startJob', () => {
     assert.equal(jobStore.entries.get(job_id)?.return_code, null);
   });
 
+  test('uses the stored repo URL when the start request omits one', async () => {
+    const logsStore = createLogsStoreMock();
+    let receivedRepoUrl: string | undefined;
+
+    const scheduler = ((callback: (...args: any[]) => void) => {
+      callback();
+      return {} as NodeJS.Immediate;
+    }) as typeof setImmediate;
+
+    const service = createJobsService(logsStore, undefined, scheduler, undefined, {
+      runBootstrap: async (_jobId: string, dto: StartJobDto) => {
+        receivedRepoUrl = dto.repo_url;
+      },
+      runCommands: async () => undefined,
+      forceRemoveContainer: () => undefined,
+    });
+
+    const created = await service.createJob(
+      {
+        goal: 'Run the repository tests after cloning the repo.',
+        repo_url: 'https://github.com/pallets/flask.git',
+      },
+      TEST_DOCKER_IMAGE,
+    );
+
+    await service.startJob(created.job_id, {});
+
+    assert.equal(receivedRepoUrl, 'https://github.com/pallets/flask.git');
+  });
+
   test('keeps stored job metadata in the start response', async () => {
     const logsStore = createLogsStoreMock();
 
@@ -151,6 +181,7 @@ describe('JobsService.bootstrapScript', () => {
     });
 
     assert.match(script, /git clone 'https:\/\/github\.com\/pallets\/flask\.git' repo/);
+    assert.match(script, /ln -sfn repo 'flask'/);
     assert.match(script, /cargo fetch/);
     assert.match(script, /python -m pip install -e \./);
     assert.doesNotMatch(script, /python -m pip install 'pytest<9'/);

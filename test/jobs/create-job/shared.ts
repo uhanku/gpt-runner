@@ -83,6 +83,11 @@ export function createJobsService(
   storageRoot?: string,
   scheduler: typeof setImmediate = noopScheduler,
   fileFetchOrJobStore?: typeof fetch | ReturnType<typeof createJobStoreMock>,
+  jobRunner?: {
+    runBootstrap(jobId: string, dto: any): Promise<void>;
+    runCommands(jobId: string, dto: any): Promise<void>;
+    forceRemoveContainer(jobId: string): void;
+  },
   jobStore = createJobStoreMock(),
 ) {
   const fileFetch = typeof fileFetchOrJobStore === 'function' ? fileFetchOrJobStore : undefined;
@@ -96,7 +101,7 @@ export function createJobsService(
     undefined,
     undefined,
     undefined,
-    undefined,
+    jobRunner as never,
     undefined,
     undefined,
     store as never,

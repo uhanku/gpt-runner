@@ -16,6 +16,10 @@ export class JobScriptBuilder {
       cloneCommand += ` ${this.shQuote(dto.repo_url)} repo`;
       lines.push('rm -rf repo');
       lines.push(cloneCommand);
+      const repoAlias = this.repoAlias(dto.repo_url);
+      if (repoAlias !== 'repo') {
+        lines.push(`ln -sfn repo ${this.shQuote(repoAlias)}`);
+      }
       lines.push('cd repo');
     }
 
@@ -129,5 +133,28 @@ export class JobScriptBuilder {
 
   private shQuote(value: string): string {
     return `'${value.replaceAll("'", `'"'"'`)}'`;
+  }
+
+  private repoAlias(repoUrl: string): string {
+    try {
+      const url = new URL(repoUrl);
+      const pathname = url.pathname.replace(/\/+$/, '');
+      const lastSegment = pathname.split('/').filter(Boolean).pop();
+
+      if (!lastSegment) {
+        return 'repo';
+      }
+
+      return lastSegment.endsWith('.git') ? lastSegment.slice(0, -4) : lastSegment;
+    } catch {
+      const trimmed = repoUrl.replace(/\/+$/, '');
+      const lastSegment = trimmed.split('/').filter(Boolean).pop();
+
+      if (!lastSegment) {
+        return 'repo';
+      }
+
+      return lastSegment.endsWith('.git') ? lastSegment.slice(0, -4) : lastSegment;
+    }
   }
 }

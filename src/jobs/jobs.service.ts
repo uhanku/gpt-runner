@@ -116,7 +116,9 @@ export class JobsService {
     await this.statuses.writeJob(jobId, status);
 
     this.scheduleImmediate(() => {
-      void this.runner.runBootstrap(jobId, dto).catch((error) => {
+      const bootstrapDto = dto.repo_url || !status.repo_url ? dto : { ...dto, repo_url: status.repo_url };
+
+      void this.runner.runBootstrap(jobId, bootstrapDto).catch((error) => {
         process.stderr.write(`[gpt-runner] failed to bootstrap job ${jobId}: ${String(error)}\n`);
       });
     });

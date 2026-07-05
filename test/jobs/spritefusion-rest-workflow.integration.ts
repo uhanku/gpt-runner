@@ -172,6 +172,7 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
           'export RUSTUP_INIT_SKIP_PATH_CHECK=yes',
           'curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal',
           '. "$HOME/.cargo/env"',
+          'cd /workspace/spritefusion-pixel-snapper',
           'cargo run --release -- ../input.png /artifacts/cat-icon-gpt-snapped.png 16',
         ],
         timeout_seconds: 900,
