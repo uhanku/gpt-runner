@@ -37,7 +37,7 @@ export class JobArtifactsService {
     });
 
     return {
-      job_id: jobId,
+      _id: jobId,
       artifacts: files,
     };
   }

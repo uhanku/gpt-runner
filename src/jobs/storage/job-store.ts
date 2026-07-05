@@ -36,41 +36,34 @@ export class JobStore {
   }
 
   async writeJob(jobId: string, status: JobStatus) {
-    const filter = { job_id: jobId };
-    const update = { ...status };
+    const filter = { _id: new mongoose.Types.ObjectId(jobId) };
+    const { _id, ...update } = status;
 
     await this.jobsModel().updateOne(filter, { $set: update }, { upsert: true });
   }
 
   async readJob(jobId: string): Promise<JobStatus> {
-    const document = await this.jobsModel().findOne({ job_id: jobId }).lean();
+    const document = await this.jobsModel().findOne({ _id: new mongoose.Types.ObjectId(jobId) }).lean();
 
     if (!document) {
       throw new NotFoundException('Job not found');
     }
 
-    const { _id, ...record } = document as JobDocument & { _id?: unknown };
-    return normalizeJobRecord(record);
+    return normalizeJobRecord(document as JobDocument);
   }
 
   async deleteJob(jobId: string) {
-    await this.jobsModel().deleteOne({ job_id: jobId });
+    await this.jobsModel().deleteOne({ _id: new mongoose.Types.ObjectId(jobId) });
   }
 
   async listJobs(): Promise<JobSummary[]> {
-    const documents = await this.jobsModel()
-      .find({}, { _id: 0 })
-      .sort({ updated_at: -1, created_at: -1, job_id: -1 })
-      .lean();
+    const documents = await this.jobsModel().find({}).sort({ updated_at: -1, created_at: -1, _id: -1 }).lean();
 
     return documents.map((document) => normalizeJobRecord(document as JobDocument));
   }
 
   async listQueuedJobs(): Promise<JobSummary[]> {
-    const documents = await this.jobsModel()
-      .find({ status: 'queued' }, { _id: 0 })
-      .sort({ updated_at: -1, created_at: -1, job_id: -1 })
-      .lean();
+    const documents = await this.jobsModel().find({ status: 'queued' }).sort({ updated_at: -1, created_at: -1, _id: -1 }).lean();
 
     return documents.map((document) => normalizeJobRecord(document as JobDocument));
   }
@@ -85,29 +78,23 @@ export class JobStore {
 }
 
 function normalizeJobRecord(document: JobDocument): JobStatus {
-  const goal =
-    typeof document.goal === 'string'
-      ? document.goal
-      : typeof document.job?.goal === 'string'
-        ? document.job.goal
-        : undefined;
+  const goal = typeof document.goal === 'string' ? document.goal : undefined;
 
   if (goal === undefined) {
     throw new InternalServerErrorException('Job document is missing goal.');
   }
 
-  const repo_url =
-    typeof document.repo_url === 'string'
-      ? document.repo_url
-      : typeof document.job?.repo_url === 'string'
-        ? document.job.repo_url
-        : undefined;
-
-  const { job: _job, ...rest } = document;
+  const repo_url = typeof document.repo_url === 'string' ? document.repo_url : undefined;
 
   return {
-    ...rest,
+    _id: String(document._id),
+    status: document.status,
+    created_at: document.created_at,
+    updated_at: document.updated_at,
+    return_code: document.return_code,
     goal,
     ...(repo_url !== undefined ? { repo_url } : {}),
+    available_job_id: document.available_job_id,
+    docker_image_name: document.docker_image_name,
   };
 }

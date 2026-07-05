@@ -33,22 +33,23 @@ describe('JobsService.createJob', () => {
     const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
     const response = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID, 'https://api.example.test');
 
-    assert.match(response.job_id, /^[0-9a-f-]{36}$/i);
+    assert.match(response._id, /^[0-9a-f]{24}$/i);
     assert.equal(response.status, 'queued');
     assert.equal(response.goal, 'Run the repository test suite.');
     assert.equal(response.repo_url, 'https://github.com/pallets/flask.git');
-    assert.equal(response.status_url, `https://api.example.test/jobs/${response.job_id}`);
-    assert.equal(response.artifacts_url, `https://api.example.test/jobs/${response.job_id}/artifacts`);
+    assert.equal(response.status_url, `https://api.example.test/jobs/${response._id}`);
+    assert.equal(response.artifacts_url, `https://api.example.test/jobs/${response._id}/artifacts`);
 
-    assert.deepEqual(jobStore.entries.get(response.job_id), {
-      job_id: response.job_id,
+    assert.deepEqual(jobStore.entries.get(response._id), {
+      _id: response._id,
       status: 'queued',
-      created_at: jobStore.entries.get(response.job_id)?.created_at,
-      updated_at: jobStore.entries.get(response.job_id)?.updated_at,
+      created_at: jobStore.entries.get(response._id)?.created_at,
+      updated_at: jobStore.entries.get(response._id)?.updated_at,
       return_code: null,
       goal: 'Run the repository test suite.',
       repo_url: 'https://github.com/pallets/flask.git',
       available_job_id: TEST_AVAILABLE_JOB_ID,
+      docker_image_name: 'gpt-runner:test-image',
     });
   });
 
@@ -65,15 +66,16 @@ describe('JobsService.createJob', () => {
       'https://api.example.test',
     );
 
-    assert.deepEqual(jobStore.entries.get(response.job_id), {
-      job_id: response.job_id,
+    assert.deepEqual(jobStore.entries.get(response._id), {
+      _id: response._id,
       status: 'queued',
-      created_at: jobStore.entries.get(response.job_id)?.created_at,
-      updated_at: jobStore.entries.get(response.job_id)?.updated_at,
+      created_at: jobStore.entries.get(response._id)?.created_at,
+      updated_at: jobStore.entries.get(response._id)?.updated_at,
       return_code: null,
       goal: 'Collect logs for the failing build.',
       repo_url: 'https://github.com/pallets/flask.git',
       available_job_id: TEST_AVAILABLE_JOB_ID,
+      docker_image_name: 'gpt-runner:test-image',
     });
   });
 
@@ -87,11 +89,11 @@ describe('JobsService.createJob', () => {
       const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
       const response = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
-      const storageJobDir = path.join(storageRoot, response.job_id);
+      const storageJobDir = path.join(storageRoot, response._id);
 
       assert.ok(existsSync(storageJobDir));
-      assert.deepEqual(jobStore.entries.get(response.job_id)?.available_job_id, TEST_AVAILABLE_JOB_ID);
-      assert.equal(existsSync(path.join(ignoredRoot, response.job_id)), false);
+      assert.deepEqual(jobStore.entries.get(response._id)?.available_job_id, TEST_AVAILABLE_JOB_ID);
+      assert.equal(existsSync(path.join(ignoredRoot, response._id)), false);
     } finally {
       delete process.env.GPT_API_ROOT;
     }
@@ -106,8 +108,8 @@ describe('JobsService.createJob', () => {
       const service = createJobsService(logsStore, storageRoot, noopScheduler);
       const response = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID, 'https://request.example.test');
 
-      assert.equal(response.status_url, `https://public.example.test/jobs/${response.job_id}`);
-      assert.equal(response.artifacts_url, `https://public.example.test/jobs/${response.job_id}/artifacts`);
+      assert.equal(response.status_url, `https://public.example.test/jobs/${response._id}`);
+      assert.equal(response.artifacts_url, `https://public.example.test/jobs/${response._id}/artifacts`);
     } finally {
       if (previousPublicBaseUrl === undefined) {
         delete process.env.PUBLIC_BASE_URL;
@@ -131,6 +133,6 @@ describe('JobsService.createJob', () => {
     const response = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
     assert.equal(scheduled, false);
-    assert.match(response.job_id, /^[0-9a-f-]{36}$/i);
+    assert.match(response._id, /^[0-9a-f]{24}$/i);
   });
 });

@@ -30,16 +30,16 @@ describe('JobsService.uploadFile', () => {
     const logsStore = createLogsStoreMock();
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
+    const { _id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
-    const response = await service.uploadFile(job_id, {}, [
+    const response = await service.uploadFile(_id, {}, [
       {
         originalname: '../report.txt',
         buffer: Buffer.from('hello world'),
       } as Express.Multer.File,
     ]);
 
-    const storedFile = path.join(storageRoot, job_id, 'workspace', 'input.png');
+    const storedFile = path.join(storageRoot, _id, 'workspace', 'input.png');
 
     assert.equal(response.filename, 'input.png');
     assert.equal(response.path_inside_container, '/workspace/input.png');
@@ -58,14 +58,14 @@ describe('JobsService.uploadFile', () => {
     }) as typeof fetch;
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler, fileFetch);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
+    const { _id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
-    const response = await service.uploadFile(job_id, {
+    const response = await service.uploadFile(_id, {
       openaiFileIdRefs: ['https://files.example.test/input.png'],
       filename: '../ignored-name.png',
     });
 
-    const storedFile = path.join(storageRoot, job_id, 'workspace', 'input.png');
+    const storedFile = path.join(storageRoot, _id, 'workspace', 'input.png');
 
     assert.equal(response.filename, 'input.png');
     assert.equal(response.path_inside_container, '/workspace/input.png');
@@ -84,9 +84,9 @@ describe('JobsService.uploadFile', () => {
     }) as typeof fetch;
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler, fileFetch);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
+    const { _id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
-    const response = await service.uploadFile(job_id, {
+    const response = await service.uploadFile(_id, {
       openaiFileIdRefs: [
         {
           name: 'feef984b-2531-4ac6-a4c6-d8eb45097a4f.png',
@@ -98,7 +98,7 @@ describe('JobsService.uploadFile', () => {
       filename: '../ignored-name.png',
     });
 
-    const storedFile = path.join(storageRoot, job_id, 'workspace', 'input.png');
+    const storedFile = path.join(storageRoot, _id, 'workspace', 'input.png');
 
     assert.equal(response.filename, 'input.png');
     assert.equal(response.path_inside_container, '/workspace/input.png');
@@ -117,14 +117,14 @@ describe('JobsService.uploadFile', () => {
     }) as typeof fetch;
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler, fileFetch);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
+    const { _id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
-    const response = await service.uploadFile(job_id, {
+    const response = await service.uploadFile(_id, {
       file: 'sediment://files/input.png',
       filename: 'source.png',
     });
 
-    const storedFile = path.join(storageRoot, job_id, 'workspace', 'input.png');
+    const storedFile = path.join(storageRoot, _id, 'workspace', 'input.png');
 
     assert.equal(response.filename, 'input.png');
     assert.equal(response.path_inside_container, '/workspace/input.png');
@@ -135,14 +135,14 @@ describe('JobsService.uploadFile', () => {
     const logsStore = createLogsStoreMock();
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
+    const { _id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
-    await assert.rejects(() => service.uploadFile(job_id, {}, []), BadRequestException);
+    await assert.rejects(() => service.uploadFile(_id, {}, []), BadRequestException);
 
     await assert.rejects(
       () =>
         service.uploadFile(
-          job_id,
+          _id,
           {
             openaiFileIdRefs: ['https://files.example.test/input.png'],
           },
@@ -166,7 +166,7 @@ describe('JobsService.uploadFile', () => {
 
     await assert.rejects(
       () =>
-        failedService.uploadFile(failedJob.job_id, {
+        failedService.uploadFile(failedJob._id, {
           openaiFileIdRefs: ['https://files.example.test/missing.png'],
         }),
       BadRequestException,
@@ -182,7 +182,7 @@ describe('JobsService.uploadFile', () => {
 
     await assert.rejects(
       () =>
-        oversizedService.uploadFile(oversizedJob.job_id, {
+        oversizedService.uploadFile(oversizedJob._id, {
           openaiFileIdRefs: ['https://files.example.test/large.png'],
         }),
       BadRequestException,
@@ -193,12 +193,12 @@ describe('JobsService.uploadFile', () => {
     const logsStore = createLogsStoreMock();
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
-    await service.startJob(job_id, {});
+    const { _id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
+    await service.startJob(_id, {});
 
     await assert.rejects(
       () =>
-        service.uploadFile(job_id, {}, [
+        service.uploadFile(_id, {}, [
           {
             originalname: 'input.png',
             buffer: Buffer.from('upload'),

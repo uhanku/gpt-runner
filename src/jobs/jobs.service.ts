@@ -1,6 +1,6 @@
 import { ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
 import { existsSync, rmSync } from 'node:fs';
+import { Types } from 'mongoose';
 import { RunJobCommandsDto, StartJobDto, UploadJobFilesDto } from './dto/create-job.dto';
 import { JobLogsStore, RecentJobLogEntry } from './shared/job-logs.store';
 import { JOB_FILE_FETCH, JOB_SCHEDULE_IMMEDIATE, JOB_STORAGE_ROOT, type FileFetch } from './shared/job.tokens';
@@ -64,14 +64,14 @@ export class JobsService {
   }
 
   async createJob(job: JobSpec, availableJobId: string, fallbackBaseUrl?: string) {
-    const jobId = randomUUID();
+    const jobId = new Types.ObjectId().toHexString();
     const baseUrl = this.urls.publicBaseUrl(fallbackBaseUrl);
     const availableJob = await this.availableJobsStore.getJob(availableJobId);
 
     this.paths.ensureJobDirs(jobId);
 
     const status: JobStatus = {
-      job_id: jobId,
+      _id: jobId,
       status: 'queued',
       created_at: this.nowIso(),
       updated_at: this.nowIso(),
@@ -79,6 +79,7 @@ export class JobsService {
       goal: job.goal,
       ...(job.repo_url !== undefined ? { repo_url: job.repo_url } : {}),
       available_job_id: availableJob.id,
+      docker_image_name: availableJob.name,
     };
 
     await this.statuses.writeJob(jobId, status);
@@ -195,21 +196,21 @@ export class JobsService {
     rmSync(dir, { recursive: true, force: true });
 
     return {
-      job_id: jobId,
+      _id: jobId,
       status: 'deleted',
     };
   }
 
   private jobEnvelope(jobId: string, status: JobState, baseUrl: string, job?: JobSpec) {
     const envelope: {
-      job_id: string;
+      _id: string;
       status: JobState;
       status_url: string;
       artifacts_url: string;
       goal?: string;
       repo_url?: string;
     } = {
-      job_id: jobId,
+      _id: jobId,
       status,
       status_url: this.urls.absoluteUrl(baseUrl, `/jobs/${jobId}`),
       artifacts_url: this.urls.absoluteUrl(baseUrl, `/jobs/${jobId}/artifacts`),

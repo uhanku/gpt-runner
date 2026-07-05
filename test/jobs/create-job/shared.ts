@@ -35,7 +35,7 @@ export function cloneJob(job: JobStatus): JobStatus {
 }
 
 export function createJobStoreMock(initialJobs: JobStatus[] = []) {
-  const entries = new Map(initialJobs.map((job) => [job.job_id, cloneJob(job)]));
+  const entries = new Map(initialJobs.map((job) => [job._id, cloneJob(job)]));
 
   return {
     entries,

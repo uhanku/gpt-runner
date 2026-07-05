@@ -67,8 +67,9 @@ export class JobsController {
         properties: {
           goal: { type: 'string' },
           repo_url: { type: 'string', nullable: true },
-          job_id: { type: 'string' },
+          _id: { type: 'string' },
           available_job_id: { type: 'string' },
+          docker_image_name: { type: 'string' },
           status: {
             type: 'string',
             enum: ['queued', 'running', 'success', 'failed', 'timeout', 'deleted'],
@@ -77,7 +78,7 @@ export class JobsController {
           updated_at: { type: 'string', format: 'date-time' },
           return_code: { type: 'integer', nullable: true },
         },
-        required: ['job_id', 'goal', 'available_job_id', 'status', 'created_at', 'updated_at', 'return_code'],
+        required: ['_id', 'goal', 'available_job_id', 'docker_image_name', 'status', 'created_at', 'updated_at', 'return_code'],
       },
     },
   })
@@ -94,8 +95,9 @@ export class JobsController {
         properties: {
           goal: { type: 'string' },
           repo_url: { type: 'string', nullable: true },
-          job_id: { type: 'string' },
+          _id: { type: 'string' },
           available_job_id: { type: 'string' },
+          docker_image_name: { type: 'string' },
           status: {
             type: 'string',
             enum: ['queued', 'running', 'success', 'failed', 'timeout', 'deleted'],
@@ -104,7 +106,7 @@ export class JobsController {
           updated_at: { type: 'string', format: 'date-time' },
           return_code: { type: 'integer', nullable: true },
         },
-        required: ['job_id', 'goal', 'available_job_id', 'status', 'created_at', 'updated_at', 'return_code'],
+        required: ['_id', 'goal', 'available_job_id', 'docker_image_name', 'status', 'created_at', 'updated_at', 'return_code'],
       },
     },
   })

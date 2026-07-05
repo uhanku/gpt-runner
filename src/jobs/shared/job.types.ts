@@ -6,7 +6,7 @@ export interface JobSpec {
 }
 
 export interface JobStatus {
-  job_id: string;
+  _id: string;
   status: JobState;
   created_at: string;
   updated_at: string;
@@ -14,11 +14,12 @@ export interface JobStatus {
   goal: string;
   repo_url?: string;
   available_job_id: string;
+  docker_image_name: string;
   logs_tail?: string;
 }
 
 export interface JobSummary {
-  job_id: string;
+  _id: string;
   status: JobState;
   created_at: string;
   updated_at: string;
@@ -26,6 +27,7 @@ export interface JobSummary {
   goal: string;
   repo_url?: string;
   available_job_id: string;
+  docker_image_name: string;
 }
 
 export interface ReferencedFile {

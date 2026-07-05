@@ -30,7 +30,7 @@ describe('JobsService.listJobs', () => {
 
     const jobStore = createJobStoreMock([
       {
-        job_id: 'job-older',
+        _id: 'job-older',
         goal: 'Inspect the older job.',
         repo_url: 'https://github.com/example/older.git',
         status: 'success',
@@ -38,9 +38,10 @@ describe('JobsService.listJobs', () => {
         updated_at: '2026-01-01T10:05:00.000Z',
         return_code: 0,
         available_job_id: TEST_AVAILABLE_JOB_ID,
+        docker_image_name: 'gpt-runner:test-image',
       },
       {
-        job_id: 'job-newer',
+        _id: 'job-newer',
         goal: 'Inspect the newer job.',
         repo_url: 'https://github.com/example/newer.git',
         status: 'running',
@@ -48,6 +49,7 @@ describe('JobsService.listJobs', () => {
         updated_at: '2026-01-02T10:30:00.000Z',
         return_code: null,
         available_job_id: TEST_AVAILABLE_JOB_ID,
+        docker_image_name: 'gpt-runner:test-image',
       },
     ]);
     const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
@@ -56,20 +58,22 @@ describe('JobsService.listJobs', () => {
 
     assert.deepEqual(jobs, [
       {
-        job_id: 'job-newer',
+        _id: 'job-newer',
         goal: 'Inspect the newer job.',
         repo_url: 'https://github.com/example/newer.git',
         available_job_id: TEST_AVAILABLE_JOB_ID,
+        docker_image_name: 'gpt-runner:test-image',
         status: 'running',
         created_at: '2026-01-02T10:00:00.000Z',
         updated_at: '2026-01-02T10:30:00.000Z',
         return_code: null,
       },
       {
-        job_id: 'job-older',
+        _id: 'job-older',
         goal: 'Inspect the older job.',
         repo_url: 'https://github.com/example/older.git',
         available_job_id: TEST_AVAILABLE_JOB_ID,
+        docker_image_name: 'gpt-runner:test-image',
         status: 'success',
         created_at: '2026-01-01T10:00:00.000Z',
         updated_at: '2026-01-01T10:05:00.000Z',

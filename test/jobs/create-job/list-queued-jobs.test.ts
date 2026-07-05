@@ -30,7 +30,7 @@ describe('JobsService.listQueuedJobs', () => {
 
     const jobStore = createJobStoreMock([
       {
-        job_id: 'job-queued',
+        _id: 'job-queued',
         goal: 'Queue the job for later execution.',
         repo_url: 'https://github.com/example/queued.git',
         status: 'queued',
@@ -38,9 +38,10 @@ describe('JobsService.listQueuedJobs', () => {
         updated_at: '2026-01-03T10:00:00.000Z',
         return_code: null,
         available_job_id: TEST_AVAILABLE_JOB_ID,
+        docker_image_name: 'gpt-runner:test-image',
       },
       {
-        job_id: 'job-running',
+        _id: 'job-running',
         goal: 'The running job should be filtered out.',
         repo_url: 'https://github.com/example/running.git',
         status: 'running',
@@ -48,16 +49,18 @@ describe('JobsService.listQueuedJobs', () => {
         updated_at: '2026-01-03T11:10:00.000Z',
         return_code: null,
         available_job_id: TEST_AVAILABLE_JOB_ID,
+        docker_image_name: 'gpt-runner:test-image',
       },
     ]);
     const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
 
     assert.deepEqual(await service.listQueuedJobs(), [
       {
-        job_id: 'job-queued',
+        _id: 'job-queued',
         goal: 'Queue the job for later execution.',
         repo_url: 'https://github.com/example/queued.git',
         available_job_id: TEST_AVAILABLE_JOB_ID,
+        docker_image_name: 'gpt-runner:test-image',
         status: 'queued',
         created_at: '2026-01-03T10:00:00.000Z',
         updated_at: '2026-01-03T10:00:00.000Z',

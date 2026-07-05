@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 import { JobLogsStore } from '../../src/jobs/shared/job-logs.store';
 
 type LogEntry = {
-  job_id: string;
+  jobId: string;
   text: string;
   created_at: Date;
 };
@@ -41,26 +41,26 @@ function createQuery(entries: LogEntry[]) {
 function createModel(entries: LogEntry[] = []) {
   const state = {
     entries,
-    created: [] as Array<{ job_id: string; text: string; created_at: Date }>,
-    deleted: [] as Array<{ job_id: string }>,
+    created: [] as Array<{ jobId: string; text: string; created_at: Date }>,
+    deleted: [] as Array<{ jobId: string }>,
     initCalled: false,
   };
 
   return {
     state,
-    create: async (entry: { job_id: string; text: string; created_at: Date }) => {
+    create: async (entry: { jobId: string; text: string; created_at: Date }) => {
       state.created.push(entry);
       state.entries.push(entry);
       return entry;
     },
-    deleteMany: async (filter: { job_id: string }) => {
+    deleteMany: async (filter: { jobId: string }) => {
       state.deleted.push(filter);
-      state.entries = state.entries.filter((entry) => entry.job_id !== filter.job_id);
+      state.entries = state.entries.filter((entry) => entry.jobId !== filter.jobId);
       return { acknowledged: true };
     },
-    find: (filter: { job_id?: string }) => {
-      const filtered = filter.job_id
-        ? state.entries.filter((entry) => entry.job_id === filter.job_id)
+    find: (filter: { jobId?: string }) => {
+      const filtered = filter.jobId
+        ? state.entries.filter((entry) => entry.jobId === filter.jobId)
         : [...state.entries];
       return createQuery(filtered);
     },
@@ -129,7 +129,7 @@ describe('JobLogsStore', () => {
     await store.append('job-1', '');
 
     assert.equal(model.state.created.length, 1);
-    assert.deepEqual(model.state.created[0]?.job_id, 'job-1');
+    assert.deepEqual(model.state.created[0]?.jobId, 'job-1');
     assert.deepEqual(model.state.created[0]?.text, 'hello');
     assert.ok(model.state.created[0]?.created_at instanceof Date);
   });
@@ -137,17 +137,17 @@ describe('JobLogsStore', () => {
   test('tail returns the newest bytes first within the limit', async () => {
     const model = createModel([
       {
-        job_id: 'job-1',
+        jobId: 'job-1',
         text: 'abc',
         created_at: new Date('2024-01-01T00:00:00.000Z'),
       },
       {
-        job_id: 'job-1',
+        jobId: 'job-1',
         text: 'def',
         created_at: new Date('2024-01-01T00:01:00.000Z'),
       },
       {
-        job_id: 'job-1',
+        jobId: 'job-1',
         text: 'ghi',
         created_at: new Date('2024-01-01T00:02:00.000Z'),
       },
@@ -162,17 +162,17 @@ describe('JobLogsStore', () => {
   test('recent returns the newest entries in descending order', async () => {
     const model = createModel([
       {
-        job_id: 'job-2',
+        jobId: 'job-2',
         text: 'latest',
         created_at: new Date('2024-01-01T00:02:00.000Z'),
       },
       {
-        job_id: 'job-1',
+        jobId: 'job-1',
         text: 'middle',
         created_at: new Date('2024-01-01T00:01:00.000Z'),
       },
       {
-        job_id: 'job-3',
+        jobId: 'job-3',
         text: 'oldest',
         created_at: new Date('2024-01-01T00:00:00.000Z'),
       },
@@ -182,12 +182,12 @@ describe('JobLogsStore', () => {
 
     assert.deepEqual(await store.recent(2), [
       {
-        job_id: 'job-2',
+        jobId: 'job-2',
         text: 'latest',
         created_at: '2024-01-01T00:02:00.000Z',
       },
       {
-        job_id: 'job-1',
+        jobId: 'job-1',
         text: 'middle',
         created_at: '2024-01-01T00:01:00.000Z',
       },
@@ -198,12 +198,12 @@ describe('JobLogsStore', () => {
   test('deleteByJobId removes all logs for the requested job', async () => {
     const model = createModel([
       {
-        job_id: 'job-1',
+        jobId: 'job-1',
         text: 'keep-me',
         created_at: new Date('2024-01-01T00:01:00.000Z'),
       },
       {
-        job_id: 'job-2',
+        jobId: 'job-2',
         text: 'remove-me',
         created_at: new Date('2024-01-01T00:02:00.000Z'),
       },
@@ -213,10 +213,10 @@ describe('JobLogsStore', () => {
 
     await store.deleteByJobId('job-2');
 
-    assert.deepEqual(model.state.deleted, [{ job_id: 'job-2' }]);
+    assert.deepEqual(model.state.deleted, [{ jobId: 'job-2' }]);
     assert.deepEqual(model.state.entries, [
       {
-        job_id: 'job-1',
+        jobId: 'job-1',
         text: 'keep-me',
         created_at: new Date('2024-01-01T00:01:00.000Z'),
       },

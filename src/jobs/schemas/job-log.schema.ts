@@ -1,7 +1,7 @@
 import { Schema } from 'mongoose';
 
 export interface JobLogDocument {
-  job_id: string;
+  jobId: string;
   text: string;
   created_at: Date;
 }
@@ -10,7 +10,7 @@ export const JOB_LOG_MODEL_NAME = 'JobLogEntry';
 
 export const jobLogSchema = new Schema<JobLogDocument>(
   {
-    job_id: {
+    jobId: {
       type: String,
       required: true,
       index: true,
@@ -26,8 +26,9 @@ export const jobLogSchema = new Schema<JobLogDocument>(
     },
   },
   {
+    id: false,
     versionKey: false,
   },
 );
 
-jobLogSchema.index({ job_id: 1, created_at: -1 });
+jobLogSchema.index({ jobId: 1, created_at: -1 });

@@ -38,9 +38,9 @@ describe('JobsService.startJob', () => {
 
     const jobStore = createJobStoreMock();
     const service = createJobsService(logsStore, storageRoot, scheduler, jobStore);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
+    const { _id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
     const response = await service.startJob(
-      job_id,
+      _id,
       {
         repo_url: 'https://github.com/pallets/flask.git',
       },
@@ -48,15 +48,15 @@ describe('JobsService.startJob', () => {
     );
 
     assert.equal(scheduled, true);
-    assert.equal(response.job_id, job_id);
+    assert.equal(response._id, _id);
     assert.equal(response.status, 'running');
     assert.equal(response.goal, 'Run the repository test suite.');
     assert.equal(response.repo_url, 'https://github.com/pallets/flask.git');
-    assert.equal(response.status_url, `https://api.example.test/jobs/${job_id}`);
-    assert.equal(response.artifacts_url, `https://api.example.test/jobs/${job_id}/artifacts`);
+    assert.equal(response.status_url, `https://api.example.test/jobs/${_id}`);
+    assert.equal(response.artifacts_url, `https://api.example.test/jobs/${_id}/artifacts`);
 
-    assert.equal(jobStore.entries.get(job_id)?.status, 'running');
-    assert.equal(jobStore.entries.get(job_id)?.return_code, null);
+    assert.equal(jobStore.entries.get(_id)?.status, 'running');
+    assert.equal(jobStore.entries.get(_id)?.return_code, null);
   });
 
   test('uses the stored repo URL when the start request omits one', async () => {
@@ -84,7 +84,7 @@ describe('JobsService.startJob', () => {
       TEST_AVAILABLE_JOB_ID,
     );
 
-    await service.startJob(created.job_id, {});
+    await service.startJob(created._id, {});
 
     assert.equal(receivedRepoUrl, 'https://github.com/pallets/flask.git');
   });
@@ -106,9 +106,9 @@ describe('JobsService.startJob', () => {
       TEST_AVAILABLE_JOB_ID,
     );
 
-    const response = await service.startJob(created.job_id, {});
+    const response = await service.startJob(created._id, {});
 
-    assert.equal(response.job_id, created.job_id);
+    assert.equal(response._id, created._id);
     assert.equal(response.status, 'running');
     assert.equal(response.goal, 'Run the repository tests after cloning the repo.');
     assert.equal(response.repo_url, 'https://github.com/pallets/flask.git');
@@ -127,10 +127,10 @@ describe('JobsService.startJob', () => {
     const service = createJobsService(logsStore, storageRoot, scheduler);
 
     for (const state of ['success', 'failed', 'timeout'] as const) {
-      const job_id = `job-${state}`;
+      const _id = `job-${state}`;
       const jobStore = createJobStoreMock([
         {
-          job_id,
+          _id,
           status: state,
           created_at: '2026-01-01T10:00:00.000Z',
           updated_at: '2026-01-01T10:05:00.000Z',
@@ -138,11 +138,12 @@ describe('JobsService.startJob', () => {
           goal: 'Queue the job for later execution.',
           repo_url: 'https://github.com/example/queued.git',
           available_job_id: TEST_AVAILABLE_JOB_ID,
+          docker_image_name: 'gpt-runner:test-image',
         },
       ]);
       const stateService = createJobsService(logsStore, storageRoot, scheduler, jobStore);
 
-      const response = await stateService.startJob(job_id, {
+      const response = await stateService.startJob(_id, {
         repo_url: 'https://github.com/example/queued.git',
       });
       assert.equal(response.status, 'running');
@@ -161,10 +162,10 @@ describe('JobsService.startJob', () => {
 
     const jobStore = createJobStoreMock();
     const service = createJobsService(logsStore, storageRoot, scheduler, jobStore);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
-    await service.startJob(job_id, {});
+    const { _id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
+    await service.startJob(_id, {});
 
-    await assert.rejects(() => service.startJob(job_id, {}), ConflictException);
+    await assert.rejects(() => service.startJob(_id, {}), ConflictException);
   });
 });
 

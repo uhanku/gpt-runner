@@ -3,7 +3,7 @@ import mongoose, { Connection, Model } from 'mongoose';
 import { JOB_LOG_MODEL_NAME, JobLogDocument, jobLogSchema } from '../schemas/job-log.schema';
 
 export interface RecentJobLogEntry {
-  job_id: string;
+  jobId: string;
   text: string;
   created_at: string;
 }
@@ -46,7 +46,7 @@ export class JobLogsStore implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.logsModel().create({
-      job_id: jobId,
+      jobId,
       text,
       created_at: new Date(),
     });
@@ -58,7 +58,7 @@ export class JobLogsStore implements OnModuleInit, OnModuleDestroy {
     }
 
     const cursor = this.logsModel()
-      .find({ job_id: jobId }, { text: 1, _id: 0 })
+      .find({ jobId }, { text: 1, _id: 0 })
       .sort({ created_at: -1, _id: -1 })
       .cursor();
 
@@ -85,7 +85,7 @@ export class JobLogsStore implements OnModuleInit, OnModuleDestroy {
   }
 
   async deleteByJobId(jobId: string) {
-    await this.logsModel().deleteMany({ job_id: jobId });
+    await this.logsModel().deleteMany({ jobId });
   }
 
   async recent(limit = 50): Promise<RecentJobLogEntry[]> {
@@ -94,7 +94,7 @@ export class JobLogsStore implements OnModuleInit, OnModuleDestroy {
     }
 
     const cursor = this.logsModel()
-      .find({}, { job_id: 1, text: 1, created_at: 1, _id: 0 })
+      .find({}, { jobId: 1, text: 1, created_at: 1, _id: 0 })
       .sort({ created_at: -1, _id: -1 })
       .limit(limit)
       .cursor();
@@ -103,7 +103,7 @@ export class JobLogsStore implements OnModuleInit, OnModuleDestroy {
 
     for await (const entry of cursor) {
       entries.push({
-        job_id: entry.job_id,
+        jobId: entry.jobId,
         text: entry.text,
         created_at: entry.created_at.toISOString(),
       });

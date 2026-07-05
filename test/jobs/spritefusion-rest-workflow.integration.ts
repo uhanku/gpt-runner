@@ -10,7 +10,7 @@ import { AppModule } from '../../src/app.module';
 import { JobLogsStore } from '../../src/jobs/shared/job-logs.store';
 
 interface JobEnvelope {
-  job_id: string;
+  _id: string;
   status: 'queued' | 'running' | 'success' | 'failed' | 'timeout' | 'deleted';
   goal: string;
   repo_url?: string;
@@ -19,7 +19,7 @@ interface JobEnvelope {
 }
 
 interface JobStatus {
-  job_id: string;
+  _id: string;
   status: 'queued' | 'running' | 'success' | 'failed' | 'timeout' | 'deleted';
   available_job_id: string;
   goal: string;
@@ -35,7 +35,7 @@ interface AvailableJob {
 }
 
 interface ArtifactList {
-  job_id: string;
+  _id: string;
   artifacts: Array<{
     name: string;
     size_bytes: number;
@@ -126,32 +126,32 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
       }),
     });
 
-    jobId = created.job_id;
-    assert.match(created.job_id, /^[0-9a-f-]{36}$/i);
+    jobId = created._id;
+    assert.match(created._id, /^[0-9a-f]{24}$/i);
     assert.equal(created.status, 'queued');
     assert.equal(created.goal, 'Run the SpriteFusion pixel snapper workflow.');
     assert.equal(created.repo_url, 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git');
-    assert.equal(created.status_url, `${baseUrl}/jobs/${created.job_id}`);
-    assert.equal(created.artifacts_url, `${baseUrl}/jobs/${created.job_id}/artifacts`);
+    assert.equal(created.status_url, `${baseUrl}/jobs/${created._id}`);
+    assert.equal(created.artifacts_url, `${baseUrl}/jobs/${created._id}/artifacts`);
 
     const uploadForm = new FormData();
     uploadForm.set('file', new Blob([readFileSync(fixturePath)], { type: 'image/png' }), 'cat-icon-gpt.png');
 
     const uploaded = await requestJson<{
-      job_id: string;
+      _id: string;
       filename: string;
       path_inside_container: string;
-    }>(`${baseUrl}/jobs/${created.job_id}/files`, {
+    }>(`${baseUrl}/jobs/${created._id}/files`, {
       method: 'POST',
       headers: authHeaders(),
       body: uploadForm,
     });
 
-    assert.equal(uploaded.job_id, created.job_id);
+    assert.equal(uploaded._id, created._id);
     assert.equal(uploaded.filename, 'input.png');
     assert.equal(uploaded.path_inside_container, '/workspace/input.png');
 
-    const started = await requestJson<JobEnvelope>(`${baseUrl}/jobs/${created.job_id}/start`, {
+    const started = await requestJson<JobEnvelope>(`${baseUrl}/jobs/${created._id}/start`, {
       method: 'POST',
       headers: {
         ...authHeaders(),
@@ -163,17 +163,17 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
       }),
     });
 
-    assert.equal(started.job_id, created.job_id);
+    assert.equal(started._id, created._id);
     assert.equal(started.status, 'running');
 
-    const bootstrapped = await waitForTerminalStatus(`${baseUrl}/jobs/${created.job_id}`);
+    const bootstrapped = await waitForTerminalStatus(`${baseUrl}/jobs/${created._id}`);
     assert.equal(
       bootstrapped.status,
       'success',
       `expected SpriteFusion bootstrap to succeed; logs tail:\n${bootstrapped.logs_tail ?? ''}`,
     );
 
-    const commandStarted = await requestJson<JobEnvelope>(`${baseUrl}/jobs/${created.job_id}/commands`, {
+    const commandStarted = await requestJson<JobEnvelope>(`${baseUrl}/jobs/${created._id}/commands`, {
       method: 'POST',
       headers: {
         ...authHeaders(),
@@ -192,10 +192,10 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
       }),
     });
 
-    assert.equal(commandStarted.job_id, created.job_id);
+    assert.equal(commandStarted._id, created._id);
     assert.equal(commandStarted.status, 'running');
 
-    const finalStatus = await waitForTerminalStatus(`${baseUrl}/jobs/${created.job_id}`);
+    const finalStatus = await waitForTerminalStatus(`${baseUrl}/jobs/${created._id}`);
     assert.equal(
       finalStatus.status,
       'success',
@@ -203,7 +203,7 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
     );
     assert.equal(finalStatus.return_code, 0);
 
-    const artifactList = await requestJson<ArtifactList>(`${baseUrl}/jobs/${created.job_id}/artifacts`, {
+    const artifactList = await requestJson<ArtifactList>(`${baseUrl}/jobs/${created._id}/artifacts`, {
       headers: authHeaders(),
     });
 
@@ -212,7 +212,7 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
     assert.ok(output.size_bytes > 0);
 
     const downloadUrl = new URL(output.download_url);
-    assert.equal(downloadUrl.origin + downloadUrl.pathname, `${baseUrl}/jobs/${created.job_id}/artifact`);
+    assert.equal(downloadUrl.origin + downloadUrl.pathname, `${baseUrl}/jobs/${created._id}/artifact`);
     assert.equal(downloadUrl.searchParams.get('path'), 'cat-icon-gpt-snapped.png');
     assert.match(downloadUrl.searchParams.get('signature') ?? '', /^[0-9a-f]{64}$/);
 

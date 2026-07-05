@@ -17,11 +17,11 @@ export class LogsController {
       items: {
         type: 'object',
         properties: {
-          job_id: { type: 'string' },
+          jobId: { type: 'string' },
           text: { type: 'string' },
           created_at: { type: 'string', format: 'date-time' },
         },
-        required: ['job_id', 'text', 'created_at'],
+        required: ['jobId', 'text', 'created_at'],
       },
     },
   })

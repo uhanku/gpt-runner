@@ -58,7 +58,7 @@ export class JobFilesService {
     this.storeInputImage(jobId, buffer);
 
     return {
-      job_id: jobId,
+      _id: jobId,
       filename: 'input.png',
       path_inside_container: '/workspace/input.png',
     };
