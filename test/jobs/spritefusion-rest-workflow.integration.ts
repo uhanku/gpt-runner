@@ -37,7 +37,7 @@ interface ArtifactList {
   }>;
 }
 
-const fixturePath = path.resolve(__dirname, '..', '..', 'storage', 'images', 'cat-icon-gpt.png');
+const fixturePath = path.resolve(__dirname, '..', '..', 'public', 'icon.png');
 const runnerImage = 'gpt-runner:spritefusion';
 
 describe('SpriteFusion Pixel Snapper REST workflow', () => {
