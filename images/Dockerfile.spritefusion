@@ -21,7 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     && rm -rf /var/lib/apt/lists/*
 
+RUN useradd --create-home --shell /bin/bash runner
+
 WORKDIR /work
+
+RUN chown runner:runner /work
 
 COPY --from=builder /app/target/release/spritefusion-pixel-snapper /usr/local/bin/pixel-snapper
 
