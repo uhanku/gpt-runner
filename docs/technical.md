@@ -1,5 +1,9 @@
 # Technical Reference
 
+## API
+
+Swagger UI is served at `http://127.0.0.1:1234/docs` by default, and the generated OpenAPI document is available at `/openapi.json`.
+
 ## Job Flow
 
 1. `POST /jobs` creates a queued job. The request must include `goal` and `available_job_id`.

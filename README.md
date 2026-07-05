@@ -13,13 +13,7 @@
   <img alt="Swagger" src="https://img.shields.io/badge/Swagger-85EA2D?style=for-the-badge&logo=swagger&logoColor=000000" />
 </p>
 
-This project is a Custom GPT-powered code experimentation sandbox.
-
-## Overview
-
 GPT Runner exposes a NestJS API for creating jobs, preparing a disposable workspace, running commands, and collecting artifacts.
-
-Swagger UI is served at `http://127.0.0.1:1234/docs` by default, and the generated OpenAPI document is available at `/openapi.json`.
 
 ## Quick Start
 
