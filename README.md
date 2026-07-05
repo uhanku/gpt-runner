@@ -82,6 +82,6 @@ The API listens on `127.0.0.1:1234` by default. Override that with `HOST` and `P
 
 `npm run test` runs the unit test suite.
 
-`npm run test:integration` seeds the available Docker image catalog, builds the Docker images, and then runs the integration test suite.
+`npm run test:integration` refreshes and seeds the available jobs catalog, builds the Docker images, and then runs the integration test suite.
 
 `npm run ci` runs lint/typecheck, unit tests, and integration tests in that order.

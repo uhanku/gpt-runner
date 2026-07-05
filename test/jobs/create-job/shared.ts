@@ -6,7 +6,14 @@ import { mkdtempSync } from 'node:fs';
 import path from 'node:path';
 import type { JobStatus } from '../../../src/jobs/shared/job.types';
 
-export const TEST_DOCKER_IMAGE = 'gpt-runner:test-image';
+export const TEST_AVAILABLE_JOB_NAME = 'gpt-runner:test-image';
+export const TEST_AVAILABLE_JOB_ID = '507f1f77bcf86cd799439011';
+
+export interface AvailableJobRecord {
+  id: string;
+  name: string;
+  goal: string;
+}
 
 export const noopScheduler = (() => {
   return ((callback: (...args: any[]) => void) => {
@@ -67,6 +74,37 @@ export function createJobStoreMock(initialJobs: JobStatus[] = []) {
   } as const;
 }
 
+export function createAvailableJobsStoreMock(initialJobs: AvailableJobRecord[] = [
+  {
+    id: TEST_AVAILABLE_JOB_ID,
+    name: TEST_AVAILABLE_JOB_NAME,
+    goal: 'remove pixel art mixels from ai and scale that image',
+  },
+]) {
+  const entries = new Map(initialJobs.map((job) => [job.id, { ...job }]));
+
+  return {
+    entries,
+    upsert: async (job: { name: string; goal: string }) => {
+      const existing = [...entries.values()].find((entry) => entry.name === job.name);
+      const id = existing?.id ?? TEST_AVAILABLE_JOB_ID;
+      entries.set(id, { id, ...job });
+    },
+    listJobs: async () => [...entries.values()].map((job) => ({ ...job })),
+    getJob: async (jobId: string) => {
+      const job = entries.get(jobId);
+
+      if (!job) {
+        throw new NotFoundException('Available job not found');
+      }
+
+      return { ...job };
+    },
+    onModuleInit: async () => undefined,
+    onModuleDestroy: async () => undefined,
+  } as const;
+}
+
 export function createLogsStoreMock() {
   return {
     append: async () => undefined,
@@ -88,6 +126,7 @@ export function createJobsService(
     runCommands(jobId: string, dto: any): Promise<void>;
     forceRemoveContainer(jobId: string): void;
   },
+  availableJobsStore = createAvailableJobsStoreMock(),
   jobStore = createJobStoreMock(),
 ) {
   const fileFetch = typeof fileFetchOrJobStore === 'function' ? fileFetchOrJobStore : undefined;
@@ -101,6 +140,7 @@ export function createJobsService(
     undefined,
     undefined,
     undefined,
+    availableJobsStore as never,
     jobRunner as never,
     undefined,
     undefined,

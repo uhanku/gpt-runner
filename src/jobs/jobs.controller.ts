@@ -34,9 +34,9 @@ export class JobsController {
     schema: {
       type: 'object',
       properties: {
-        docker_image_name: {
+        available_job_id: {
           type: 'string',
-          description: 'Docker image name used to run the job.',
+          description: 'The id of the available job entry that defines the docker image to run.',
         },
         goal: {
           type: 'string',
@@ -47,13 +47,13 @@ export class JobsController {
           description: 'The repository URL for the job.',
         },
       },
-      required: ['goal', 'docker_image_name'],
+      required: ['goal', 'available_job_id'],
     },
   })
   async createJob(@Body() dto: CreateJobDto, @Req() request: Request) {
     return this.jobsService.createJob(
       { goal: dto.goal, repo_url: dto.repo_url },
-      dto.docker_image_name,
+      dto.available_job_id,
       this.requestOrigin(request),
     );
   }
@@ -68,7 +68,7 @@ export class JobsController {
           goal: { type: 'string' },
           repo_url: { type: 'string', nullable: true },
           job_id: { type: 'string' },
-          docker_image_name: { type: 'string' },
+          available_job_id: { type: 'string' },
           status: {
             type: 'string',
             enum: ['queued', 'running', 'success', 'failed', 'timeout', 'deleted'],
@@ -77,7 +77,7 @@ export class JobsController {
           updated_at: { type: 'string', format: 'date-time' },
           return_code: { type: 'integer', nullable: true },
         },
-        required: ['job_id', 'goal', 'docker_image_name', 'status', 'created_at', 'updated_at', 'return_code'],
+        required: ['job_id', 'goal', 'available_job_id', 'status', 'created_at', 'updated_at', 'return_code'],
       },
     },
   })
@@ -95,7 +95,7 @@ export class JobsController {
           goal: { type: 'string' },
           repo_url: { type: 'string', nullable: true },
           job_id: { type: 'string' },
-          docker_image_name: { type: 'string' },
+          available_job_id: { type: 'string' },
           status: {
             type: 'string',
             enum: ['queued', 'running', 'success', 'failed', 'timeout', 'deleted'],
@@ -104,7 +104,7 @@ export class JobsController {
           updated_at: { type: 'string', format: 'date-time' },
           return_code: { type: 'integer', nullable: true },
         },
-        required: ['job_id', 'goal', 'docker_image_name', 'status', 'created_at', 'updated_at', 'return_code'],
+        required: ['job_id', 'goal', 'available_job_id', 'status', 'created_at', 'updated_at', 'return_code'],
       },
     },
   })

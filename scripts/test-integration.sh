@@ -27,6 +27,7 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
-npm run seed:available-images
+docker compose -f "$compose_file" exec -T mongo mongosh --quiet --eval 'const dbRef = db.getSiblingDB("gpt_runner"); dbRef.getCollection("available_jobs").drop(); dbRef.getCollection("available_docker_images").drop();'
+npm run seed:available-jobs
 npm run build:images
 node -r ts-node/register --test test/**/*.integration.ts

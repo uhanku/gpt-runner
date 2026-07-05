@@ -5,6 +5,7 @@ import path from 'node:path';
 import { JobLogsStore } from '../shared/job-logs.store';
 import { JobPathsService } from '../storage/job-paths.service';
 import { JobStore } from '../storage/job-store';
+import { AvailableJobsStore } from '../storage/available-jobs.store';
 import { JobScriptBuilder } from './job-script.builder';
 import { RunJobCommandsDto, StartJobDto } from '../dto/create-job.dto';
 
@@ -15,6 +16,7 @@ export class JobRunnerService {
     private readonly statuses: JobStore,
     private readonly logs: JobLogsStore,
     private readonly scriptBuilder: JobScriptBuilder,
+    private readonly availableJobsStore: AvailableJobsStore,
   ) {}
 
   async runBootstrap(jobId: string, dto: StartJobDto) {
@@ -76,7 +78,8 @@ export class JobRunnerService {
       args.push('--cap-drop', 'ALL');
     }
 
-    args.push(status.docker_image_name);
+    const availableJob = await this.availableJobsStore.getJob(status.available_job_id);
+    args.push(availableJob.name);
     args.push('bash', '/tmp/run.sh');
 
     this.appendLog(jobId, `$ docker ${args.join(' ')}\n\n`);

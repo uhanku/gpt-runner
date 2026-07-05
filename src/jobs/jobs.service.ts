@@ -10,6 +10,7 @@ import { ArtifactSignerService } from './artifacts/artifact-signer.service';
 import { JobFilesService } from './files/job-files.service';
 import { JobPathsService } from './storage/job-paths.service';
 import { JobStore } from './storage/job-store';
+import { AvailableJobsStore } from './storage/available-jobs.store';
 import { JobRunnerService } from './runner/job-runner.service';
 import { JobScriptBuilder } from './runner/job-script.builder';
 import { JobUrlService } from './job-url.service';
@@ -22,6 +23,7 @@ export class JobsService {
   private readonly statuses: JobStore;
   private readonly urls: JobUrlService;
   private readonly scriptBuilder: JobScriptBuilder;
+  private readonly availableJobsStore: AvailableJobsStore;
   private readonly runner: JobRunnerService;
   private readonly files: JobFilesService;
   private readonly artifacts: JobArtifactsService;
@@ -38,6 +40,7 @@ export class JobsService {
     @Optional() private readonly jobPaths?: JobPathsService,
     @Optional() private readonly jobUrlService?: JobUrlService,
     @Optional() private readonly jobScriptBuilder?: JobScriptBuilder,
+    @Optional() availableJobsStore?: AvailableJobsStore,
     @Optional() private readonly jobRunner?: JobRunnerService,
     @Optional() private readonly jobFiles?: JobFilesService,
     @Optional() private readonly jobArtifacts?: JobArtifactsService,
@@ -46,9 +49,11 @@ export class JobsService {
     this.paths = jobPaths ?? new JobPathsService(storageRoot);
     this.statuses = jobStore ?? new JobStore();
     this.urls = jobUrlService ?? new JobUrlService();
+    this.availableJobsStore = availableJobsStore ?? new AvailableJobsStore();
 
     this.scriptBuilder = jobScriptBuilder ?? new JobScriptBuilder();
-    const runner = jobRunner ?? new JobRunnerService(this.paths, this.statuses, this.jobLogsStore, this.scriptBuilder);
+    const runner =
+      jobRunner ?? new JobRunnerService(this.paths, this.statuses, this.jobLogsStore, this.scriptBuilder, this.availableJobsStore);
     const files = jobFiles ?? new JobFilesService(this.statuses, this.paths, fileFetch);
     const artifacts =
       jobArtifacts ?? new JobArtifactsService(this.statuses, this.paths, new ArtifactSignerService(), this.urls);
@@ -58,9 +63,10 @@ export class JobsService {
     this.artifacts = artifacts;
   }
 
-  async createJob(job: JobSpec, dockerImageName: string, fallbackBaseUrl?: string) {
+  async createJob(job: JobSpec, availableJobId: string, fallbackBaseUrl?: string) {
     const jobId = randomUUID();
     const baseUrl = this.urls.publicBaseUrl(fallbackBaseUrl);
+    const availableJob = await this.availableJobsStore.getJob(availableJobId);
 
     this.paths.ensureJobDirs(jobId);
 
@@ -72,7 +78,7 @@ export class JobsService {
       return_code: null,
       goal: job.goal,
       ...(job.repo_url !== undefined ? { repo_url: job.repo_url } : {}),
-      docker_image_name: dockerImageName,
+      available_job_id: availableJob.id,
     };
 
     await this.statuses.writeJob(jobId, status);

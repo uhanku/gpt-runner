@@ -9,7 +9,7 @@ import {
   createLogsStoreMock,
   createTempStorageRoot,
   noopScheduler,
-  TEST_DOCKER_IMAGE,
+  TEST_AVAILABLE_JOB_ID,
 } from './shared';
 
 describe('JobsService.uploadFile', () => {
@@ -30,7 +30,7 @@ describe('JobsService.uploadFile', () => {
     const logsStore = createLogsStoreMock();
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
     const response = await service.uploadFile(job_id, {}, [
       {
@@ -58,7 +58,7 @@ describe('JobsService.uploadFile', () => {
     }) as typeof fetch;
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler, fileFetch);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
     const response = await service.uploadFile(job_id, {
       openaiFileIdRefs: ['https://files.example.test/input.png'],
@@ -84,7 +84,7 @@ describe('JobsService.uploadFile', () => {
     }) as typeof fetch;
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler, fileFetch);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
     const response = await service.uploadFile(job_id, {
       openaiFileIdRefs: [
@@ -117,7 +117,7 @@ describe('JobsService.uploadFile', () => {
     }) as typeof fetch;
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler, fileFetch);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
     const response = await service.uploadFile(job_id, {
       file: 'sediment://files/input.png',
@@ -135,7 +135,7 @@ describe('JobsService.uploadFile', () => {
     const logsStore = createLogsStoreMock();
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
     await assert.rejects(() => service.uploadFile(job_id, {}, []), BadRequestException);
 
@@ -162,7 +162,7 @@ describe('JobsService.uploadFile', () => {
 
     const failedFetch = (async () => new Response('missing', { status: 404 })) as typeof fetch;
     const failedService = createJobsService(logsStore, storageRoot, noopScheduler, failedFetch);
-    const failedJob = await failedService.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const failedJob = await failedService.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
     await assert.rejects(
       () =>
@@ -178,7 +178,7 @@ describe('JobsService.uploadFile', () => {
         headers: { 'content-length': String(51 * 1024 * 1024) },
       })) as typeof fetch;
     const oversizedService = createJobsService(logsStore, storageRoot, noopScheduler, oversizedFetch);
-    const oversizedJob = await oversizedService.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const oversizedJob = await oversizedService.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
     await assert.rejects(
       () =>
@@ -193,7 +193,7 @@ describe('JobsService.uploadFile', () => {
     const logsStore = createLogsStoreMock();
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
     await service.startJob(job_id, {});
 
     await assert.rejects(

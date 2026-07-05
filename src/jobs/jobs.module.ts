@@ -7,18 +7,21 @@ import { JobsController } from './jobs.controller';
 import { JobFilesService } from './files/job-files.service';
 import { JobPathsService } from './storage/job-paths.service';
 import { JobStore } from './storage/job-store';
+import { AvailableJobsStore } from './storage/available-jobs.store';
 import { LogsController } from './logs.controller';
 import { JobsService } from './jobs.service';
 import { JobRunnerService } from './runner/job-runner.service';
 import { JobScriptBuilder } from './runner/job-script.builder';
 import { JobUrlService } from './job-url.service';
+import { AvailableJobsController } from './available-jobs.controller';
 
 @Module({
-  controllers: [JobsController, LogsController],
+  controllers: [JobsController, LogsController, AvailableJobsController],
   providers: [
     JobsService,
     JobLogsStore,
     BearerAuthGuard,
+    AvailableJobsStore,
     JobPathsService,
     JobStore,
     JobUrlService,

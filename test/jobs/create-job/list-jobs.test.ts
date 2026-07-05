@@ -7,7 +7,7 @@ import {
   createLogsStoreMock,
   createTempStorageRoot,
   noopScheduler,
-  TEST_DOCKER_IMAGE,
+  TEST_AVAILABLE_JOB_ID,
 } from './shared';
 
 describe('JobsService.listJobs', () => {
@@ -37,7 +37,7 @@ describe('JobsService.listJobs', () => {
         created_at: '2026-01-01T10:00:00.000Z',
         updated_at: '2026-01-01T10:05:00.000Z',
         return_code: 0,
-        docker_image_name: TEST_DOCKER_IMAGE,
+        available_job_id: TEST_AVAILABLE_JOB_ID,
       },
       {
         job_id: 'job-newer',
@@ -47,7 +47,7 @@ describe('JobsService.listJobs', () => {
         created_at: '2026-01-02T10:00:00.000Z',
         updated_at: '2026-01-02T10:30:00.000Z',
         return_code: null,
-        docker_image_name: TEST_DOCKER_IMAGE,
+        available_job_id: TEST_AVAILABLE_JOB_ID,
       },
     ]);
     const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
@@ -59,7 +59,7 @@ describe('JobsService.listJobs', () => {
         job_id: 'job-newer',
         goal: 'Inspect the newer job.',
         repo_url: 'https://github.com/example/newer.git',
-        docker_image_name: TEST_DOCKER_IMAGE,
+        available_job_id: TEST_AVAILABLE_JOB_ID,
         status: 'running',
         created_at: '2026-01-02T10:00:00.000Z',
         updated_at: '2026-01-02T10:30:00.000Z',
@@ -69,7 +69,7 @@ describe('JobsService.listJobs', () => {
         job_id: 'job-older',
         goal: 'Inspect the older job.',
         repo_url: 'https://github.com/example/older.git',
-        docker_image_name: TEST_DOCKER_IMAGE,
+        available_job_id: TEST_AVAILABLE_JOB_ID,
         status: 'success',
         created_at: '2026-01-01T10:00:00.000Z',
         updated_at: '2026-01-01T10:05:00.000Z',

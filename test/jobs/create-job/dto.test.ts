@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { CreateJobDto, RunJobCommandsDto, StartJobDto, UploadJobFilesDto } from '../../../src/jobs/dto/create-job.dto';
-import { TEST_DOCKER_IMAGE } from './shared';
+import { TEST_AVAILABLE_JOB_ID } from './shared';
 
 describe('CreateJobDto', () => {
   const pipe = new ValidationPipe({
@@ -14,7 +14,7 @@ describe('CreateJobDto', () => {
   test('accepts the flat job payload', async () => {
     const result = await pipe.transform(
       {
-        docker_image_name: TEST_DOCKER_IMAGE,
+        available_job_id: TEST_AVAILABLE_JOB_ID,
         goal: 'Run the repository tests and summarize failures.',
         repo_url: 'https://github.com/pallets/flask.git',
       },
@@ -32,7 +32,7 @@ describe('CreateJobDto', () => {
   test('accepts goal without repo_url', async () => {
     const result = await pipe.transform(
       {
-        docker_image_name: TEST_DOCKER_IMAGE,
+        available_job_id: TEST_AVAILABLE_JOB_ID,
         goal: 'Run the repository tests and summarize failures.',
       },
       {
@@ -48,9 +48,9 @@ describe('CreateJobDto', () => {
 
   test('rejects empty and incomplete create-job payloads', async () => {
     const cases = [
-      { payload: {}, message: 'docker_image_name should be required' },
+      { payload: {}, message: 'available_job_id should be required' },
       {
-        payload: { docker_image_name: TEST_DOCKER_IMAGE },
+        payload: { available_job_id: TEST_AVAILABLE_JOB_ID },
         message: 'goal should be required',
       },
     ];

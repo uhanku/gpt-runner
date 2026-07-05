@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { afterEach, describe, test } from 'node:test';
 import mongoose from 'mongoose';
-import { AvailableDockerImagesStore } from '../../src/jobs/storage/available-docker-images.store';
+import { AvailableJobsStore } from '../../src/jobs/storage/available-jobs.store';
 
 function createModel() {
   const state = {
@@ -30,7 +30,7 @@ function createModel() {
   };
 }
 
-describe('AvailableDockerImagesStore', () => {
+describe('AvailableJobsStore', () => {
   const mongooseAny = mongoose as any;
   const originalCreateConnection = mongooseAny.createConnection as typeof mongoose.createConnection;
 
@@ -39,7 +39,7 @@ describe('AvailableDockerImagesStore', () => {
   });
 
   test('initializes a mongoose connection and model with the configured collection', async () => {
-    const store = new AvailableDockerImagesStore();
+    const store = new AvailableJobsStore();
     const model = createModel();
     const connection = {
       asPromise: async () => connection,
@@ -70,8 +70,8 @@ describe('AvailableDockerImagesStore', () => {
 
   test('upsert writes the available image document by name', async () => {
     const model = createModel();
-    const store = new AvailableDockerImagesStore();
-    (store as unknown as { imageModel: typeof model }).imageModel = model;
+    const store = new AvailableJobsStore();
+    (store as unknown as { jobModel: typeof model }).jobModel = model;
 
     await store.upsert({
       name: 'images/Dockerfile.spritefusion',

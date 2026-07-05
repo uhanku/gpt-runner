@@ -10,7 +10,7 @@ import {
   createLogsStoreMock,
   createTempStorageRoot,
   noopScheduler,
-  TEST_DOCKER_IMAGE,
+  TEST_AVAILABLE_JOB_ID,
 } from './shared';
 
 describe('JobsService.listArtifacts', () => {
@@ -40,7 +40,7 @@ describe('JobsService.listArtifacts', () => {
     const logsStore = createLogsStoreMock();
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
     const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
     mkdirSync(path.join(artifactsDir, 'nested'), { recursive: true });
@@ -74,7 +74,7 @@ describe('JobsService.listArtifacts', () => {
       const logsStore = createLogsStoreMock();
 
       const service = createJobsService(logsStore, storageRoot, noopScheduler);
-      const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+      const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
       const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
       writeFileSync(path.join(artifactsDir, 'report.txt'), 'ok', 'utf8');
@@ -127,7 +127,7 @@ describe('JobsService.listArtifacts', () => {
       /cargo run --release -- mixed-pixel-art\.png \/artifacts\/spritefusion-pixel-snapped\.png 4 --pixel-size 8/,
     );
 
-    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
     const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
     const outputImage = path.join(artifactsDir, 'spritefusion-pixel-snapped.png');
     writeFileSync(
@@ -163,8 +163,8 @@ describe('JobsService.listArtifacts', () => {
     const logsStore = createLogsStoreMock();
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
-    const otherJob = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
+    const otherJob = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
     const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
     writeFileSync(path.join(artifactsDir, 'report.txt'), 'ok', 'utf8');
@@ -191,7 +191,7 @@ describe('JobsService.listArtifacts', () => {
     const logsStore = createLogsStoreMock();
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
     const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
     writeFileSync(path.join(artifactsDir, 'report.txt'), 'ok', 'utf8');

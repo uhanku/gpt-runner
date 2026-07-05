@@ -1,13 +1,19 @@
 import { Schema } from 'mongoose';
 
-export interface AvailableDockerImageDocument {
+export interface AvailableJobDocument {
   name: string;
   goal: string;
 }
 
-export const AVAILABLE_DOCKER_IMAGE_MODEL_NAME = 'AvailableDockerImage';
+export interface AvailableJobSummary {
+  id: string;
+  name: string;
+  goal: string;
+}
 
-export const availableDockerImageSchema = new Schema<AvailableDockerImageDocument>(
+export const AVAILABLE_JOB_MODEL_NAME = 'AvailableJob';
+
+export const availableJobSchema = new Schema<AvailableJobDocument>(
   {
     name: {
       type: String,

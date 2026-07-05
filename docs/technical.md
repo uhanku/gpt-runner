@@ -2,7 +2,7 @@
 
 ## Job Flow
 
-1. `POST /jobs` creates a queued job. The request must include `goal` and `docker_image_name`.
+1. `POST /jobs` creates a queued job. The request must include `goal` and `available_job_id`.
 2. `POST /jobs/:jobId/files` uploads the input file or downloads a referenced file into `/workspace/input.png`.
 3. `POST /jobs/:jobId/start` clones the repository, checks out the requested branch when provided, and installs workspace dependencies.
 4. `POST /jobs/:jobId/commands` runs commands inside the prepared workspace.
@@ -11,6 +11,8 @@
 
 Useful supporting routes:
 
+- `GET /available-jobs`
+- `GET /available-jobs/:id`
 - `GET /jobs`
 - `GET /jobs/queued`
 - `GET /jobs/:jobId`
@@ -36,7 +38,7 @@ The SpriteFusion image build helper lives at `images/build-spritefusion.sh`.
 
 ## API Notes
 
-The job create request stores `docker_image_name` on the job record and reuses it when the job starts.
+The job create request stores `available_job_id` on the job record and the runner resolves the docker image name from the available jobs catalog when the job starts.
 
 `POST /jobs/:jobId/start` is the bootstrap step for pulling the repo and installing dependencies.
 

@@ -13,8 +13,8 @@ describe('Swagger docs', () => {
     const bodyMetadata = metadata?.find((entry) => entry.in === 'body');
 
     assert.ok(bodyMetadata);
-    assert.deepEqual(bodyMetadata?.schema?.required, ['goal', 'docker_image_name']);
-    assert.ok(bodyMetadata?.schema?.properties?.docker_image_name);
+    assert.deepEqual(bodyMetadata?.schema?.required, ['goal', 'available_job_id']);
+    assert.ok(bodyMetadata?.schema?.properties?.available_job_id);
   });
 
   test('documents the bootstrap start-job request body example', async () => {

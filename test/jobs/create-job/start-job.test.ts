@@ -9,7 +9,7 @@ import {
   createJobsService,
   createLogsStoreMock,
   createTempStorageRoot,
-  TEST_DOCKER_IMAGE,
+  TEST_AVAILABLE_JOB_ID,
 } from './shared';
 
 describe('JobsService.startJob', () => {
@@ -38,7 +38,7 @@ describe('JobsService.startJob', () => {
 
     const jobStore = createJobStoreMock();
     const service = createJobsService(logsStore, storageRoot, scheduler, jobStore);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
     const response = await service.startJob(
       job_id,
       {
@@ -81,7 +81,7 @@ describe('JobsService.startJob', () => {
         goal: 'Run the repository tests after cloning the repo.',
         repo_url: 'https://github.com/pallets/flask.git',
       },
-      TEST_DOCKER_IMAGE,
+      TEST_AVAILABLE_JOB_ID,
     );
 
     await service.startJob(created.job_id, {});
@@ -103,7 +103,7 @@ describe('JobsService.startJob', () => {
         goal: 'Run the repository tests after cloning the repo.',
         repo_url: 'https://github.com/pallets/flask.git',
       },
-      TEST_DOCKER_IMAGE,
+      TEST_AVAILABLE_JOB_ID,
     );
 
     const response = await service.startJob(created.job_id, {});
@@ -137,7 +137,7 @@ describe('JobsService.startJob', () => {
           return_code: 1,
           goal: 'Queue the job for later execution.',
           repo_url: 'https://github.com/example/queued.git',
-          docker_image_name: TEST_DOCKER_IMAGE,
+          available_job_id: TEST_AVAILABLE_JOB_ID,
         },
       ]);
       const stateService = createJobsService(logsStore, storageRoot, scheduler, jobStore);
@@ -161,7 +161,7 @@ describe('JobsService.startJob', () => {
 
     const jobStore = createJobStoreMock();
     const service = createJobsService(logsStore, storageRoot, scheduler, jobStore);
-    const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const { job_id } = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
     await service.startJob(job_id, {});
 
     await assert.rejects(() => service.startJob(job_id, {}), ConflictException);

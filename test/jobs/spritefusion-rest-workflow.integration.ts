@@ -21,11 +21,17 @@ interface JobEnvelope {
 interface JobStatus {
   job_id: string;
   status: 'queued' | 'running' | 'success' | 'failed' | 'timeout' | 'deleted';
-  docker_image_name: string;
+  available_job_id: string;
   goal: string;
   repo_url?: string;
   return_code: number | null;
   logs_tail?: string;
+}
+
+interface AvailableJob {
+  id: string;
+  name: string;
+  goal: string;
 }
 
 interface ArtifactList {
@@ -101,6 +107,12 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
       return;
     }
 
+    const availableJobs = await requestJson<AvailableJob[]>(`${baseUrl}/available-jobs`, {
+      headers: authHeaders(),
+    });
+    const spritefusionJob = availableJobs.find((job) => job.name === runnerImage);
+    assert.ok(spritefusionJob, `expected ${runnerImage} to be seeded in available jobs`);
+
     const created = await requestJson<JobEnvelope>(`${baseUrl}/jobs`, {
       method: 'POST',
       headers: {
@@ -108,7 +120,7 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        docker_image_name: runnerImage,
+        available_job_id: spritefusionJob.id,
         goal: 'Run the SpriteFusion pixel snapper workflow.',
         repo_url: 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
       }),

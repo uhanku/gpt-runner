@@ -9,7 +9,7 @@
     "dev": "nest start --watch",
     "build:spritefusion": "bash images/build-spritefusion.sh",
     "build:images": "bash images/build-all.sh",
-    "seed:available-images": "node -r ts-node/register src/seeds/available-docker-images.seed.ts",
+    "seed:available-jobs": "node -r ts-node/register src/seeds/available-jobs.seed.ts",
     "test:integration": "bash scripts/test-integration.sh",
     "ci": "bash scripts/ci.sh",
     "lint": "npx tsc --noEmit -p tsconfig.json",

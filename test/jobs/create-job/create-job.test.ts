@@ -10,7 +10,7 @@ import {
   createLogsStoreMock,
   createTempStorageRoot,
   noopScheduler,
-  TEST_DOCKER_IMAGE,
+  TEST_AVAILABLE_JOB_ID,
 } from './shared';
 
 describe('JobsService.createJob', () => {
@@ -31,7 +31,7 @@ describe('JobsService.createJob', () => {
     const logsStore = createLogsStoreMock();
     const jobStore = createJobStoreMock();
     const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
-    const response = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE, 'https://api.example.test');
+    const response = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID, 'https://api.example.test');
 
     assert.match(response.job_id, /^[0-9a-f-]{36}$/i);
     assert.equal(response.status, 'queued');
@@ -48,7 +48,7 @@ describe('JobsService.createJob', () => {
       return_code: null,
       goal: 'Run the repository test suite.',
       repo_url: 'https://github.com/pallets/flask.git',
-      docker_image_name: TEST_DOCKER_IMAGE,
+      available_job_id: TEST_AVAILABLE_JOB_ID,
     });
   });
 
@@ -61,7 +61,7 @@ describe('JobsService.createJob', () => {
         goal: 'Collect logs for the failing build.',
         repo_url: 'https://github.com/pallets/flask.git',
       },
-      TEST_DOCKER_IMAGE,
+      TEST_AVAILABLE_JOB_ID,
       'https://api.example.test',
     );
 
@@ -73,7 +73,7 @@ describe('JobsService.createJob', () => {
       return_code: null,
       goal: 'Collect logs for the failing build.',
       repo_url: 'https://github.com/pallets/flask.git',
-      docker_image_name: TEST_DOCKER_IMAGE,
+      available_job_id: TEST_AVAILABLE_JOB_ID,
     });
   });
 
@@ -85,12 +85,12 @@ describe('JobsService.createJob', () => {
       const logsStore = createLogsStoreMock();
       const jobStore = createJobStoreMock();
       const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
-      const response = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+      const response = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
       const storageJobDir = path.join(storageRoot, response.job_id);
 
       assert.ok(existsSync(storageJobDir));
-      assert.deepEqual(jobStore.entries.get(response.job_id)?.docker_image_name, TEST_DOCKER_IMAGE);
+      assert.deepEqual(jobStore.entries.get(response.job_id)?.available_job_id, TEST_AVAILABLE_JOB_ID);
       assert.equal(existsSync(path.join(ignoredRoot, response.job_id)), false);
     } finally {
       delete process.env.GPT_API_ROOT;
@@ -104,7 +104,7 @@ describe('JobsService.createJob', () => {
     try {
       const logsStore = createLogsStoreMock();
       const service = createJobsService(logsStore, storageRoot, noopScheduler);
-      const response = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE, 'https://request.example.test');
+      const response = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID, 'https://request.example.test');
 
       assert.equal(response.status_url, `https://public.example.test/jobs/${response.job_id}`);
       assert.equal(response.artifacts_url, `https://public.example.test/jobs/${response.job_id}/artifacts`);
@@ -128,7 +128,7 @@ describe('JobsService.createJob', () => {
     }) as typeof setImmediate;
 
     const service = createJobsService(logsStore, storageRoot, scheduler);
-    const response = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
+    const response = await service.createJob(createJobSpec(), TEST_AVAILABLE_JOB_ID);
 
     assert.equal(scheduled, false);
     assert.match(response.job_id, /^[0-9a-f-]{36}$/i);

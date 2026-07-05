@@ -1,9 +1,9 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { AVAILABLE_DOCKER_IMAGE_SEEDS, seedAvailableDockerImages } from '../../src/seeds/available-docker-images.seed';
+import { AVAILABLE_JOB_SEEDS, seedAvailableJobs } from '../../src/seeds/available-jobs.seed';
 
-describe('seedAvailableDockerImages', () => {
+describe('seedAvailableJobs', () => {
   test('upserts the spritefusion runner image seed', async () => {
     const calls: Array<{
       name: string;
@@ -12,7 +12,7 @@ describe('seedAvailableDockerImages', () => {
     let initCalled = false;
     let destroyCalled = false;
 
-    await seedAvailableDockerImages({
+    await seedAvailableJobs({
       onModuleInit: async () => {
         initCalled = true;
       },
@@ -26,6 +26,6 @@ describe('seedAvailableDockerImages', () => {
 
     assert.equal(initCalled, true);
     assert.equal(destroyCalled, true);
-    assert.deepEqual(calls, AVAILABLE_DOCKER_IMAGE_SEEDS);
+    assert.deepEqual(calls, AVAILABLE_JOB_SEEDS);
   });
 });

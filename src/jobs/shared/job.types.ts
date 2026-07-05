@@ -13,7 +13,7 @@ export interface JobStatus {
   return_code: number | null;
   goal: string;
   repo_url?: string;
-  docker_image_name: string;
+  available_job_id: string;
   logs_tail?: string;
 }
 
@@ -25,7 +25,7 @@ export interface JobSummary {
   return_code: number | null;
   goal: string;
   repo_url?: string;
-  docker_image_name: string;
+  available_job_id: string;
 }
 
 export interface ReferencedFile {

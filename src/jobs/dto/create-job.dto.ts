@@ -113,11 +113,11 @@ class OpenAiFileIdRefsConstraint implements ValidatorConstraintInterface {
 
 export class CreateJobDto {
   @ApiProperty({
-    description: 'Docker image name used to run the job.',
-    example: 'gpt-runner:spritefusion',
+    description: 'The id of the available job entry that defines the docker image to run.',
+    example: '507f1f77bcf86cd799439011',
   })
   @IsString()
-  docker_image_name!: string;
+  available_job_id!: string;
 
   @ApiProperty({
     description: 'The goal of the job.',

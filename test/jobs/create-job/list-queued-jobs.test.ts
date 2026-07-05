@@ -7,7 +7,7 @@ import {
   createLogsStoreMock,
   createTempStorageRoot,
   noopScheduler,
-  TEST_DOCKER_IMAGE,
+  TEST_AVAILABLE_JOB_ID,
 } from './shared';
 
 describe('JobsService.listQueuedJobs', () => {
@@ -37,7 +37,7 @@ describe('JobsService.listQueuedJobs', () => {
         created_at: '2026-01-03T10:00:00.000Z',
         updated_at: '2026-01-03T10:00:00.000Z',
         return_code: null,
-        docker_image_name: TEST_DOCKER_IMAGE,
+        available_job_id: TEST_AVAILABLE_JOB_ID,
       },
       {
         job_id: 'job-running',
@@ -47,7 +47,7 @@ describe('JobsService.listQueuedJobs', () => {
         created_at: '2026-01-03T11:00:00.000Z',
         updated_at: '2026-01-03T11:10:00.000Z',
         return_code: null,
-        docker_image_name: TEST_DOCKER_IMAGE,
+        available_job_id: TEST_AVAILABLE_JOB_ID,
       },
     ]);
     const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
@@ -57,7 +57,7 @@ describe('JobsService.listQueuedJobs', () => {
         job_id: 'job-queued',
         goal: 'Queue the job for later execution.',
         repo_url: 'https://github.com/example/queued.git',
-        docker_image_name: TEST_DOCKER_IMAGE,
+        available_job_id: TEST_AVAILABLE_JOB_ID,
         status: 'queued',
         created_at: '2026-01-03T10:00:00.000Z',
         updated_at: '2026-01-03T10:00:00.000Z',
