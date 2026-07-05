@@ -1,15 +1,6 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import mongoose, { Connection, Model } from 'mongoose';
-import {
-  JOB_LOG_MODEL_NAME,
-  JobLogDocument,
-  jobLogSchema,
-} from '../schemas/job-log.schema';
+import { JOB_LOG_MODEL_NAME, JobLogDocument, jobLogSchema } from '../schemas/job-log.schema';
 
 export interface RecentJobLogEntry {
   job_id: string;
@@ -38,11 +29,7 @@ export class JobLogsStore implements OnModuleInit, OnModuleDestroy {
     });
 
     this.connection = await connection.asPromise();
-    this.logModel = this.connection.model<JobLogDocument>(
-      JOB_LOG_MODEL_NAME,
-      jobLogSchema,
-      this.collectionName,
-    );
+    this.logModel = this.connection.model<JobLogDocument>(JOB_LOG_MODEL_NAME, jobLogSchema, this.collectionName);
 
     await this.logModel.init();
   }

@@ -3,7 +3,14 @@ import { afterEach, beforeEach, describe, test } from 'node:test';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
-import { createJobSpec, createJobsService, createLogsStoreMock, createTempStorageRoot, noopScheduler, TEST_DOCKER_IMAGE } from './shared';
+import {
+  createJobSpec,
+  createJobsService,
+  createLogsStoreMock,
+  createTempStorageRoot,
+  noopScheduler,
+  TEST_DOCKER_IMAGE,
+} from './shared';
 
 describe('JobsService.uploadFile', () => {
   let tempRoot: string;
@@ -25,23 +32,14 @@ describe('JobsService.uploadFile', () => {
     const service = createJobsService(logsStore, storageRoot, noopScheduler);
     const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
-    const response = await service.uploadFile(
-      job_id,
-      {},
-      [
-        {
-          originalname: '../report.txt',
-          buffer: Buffer.from('hello world'),
-        } as Express.Multer.File,
-      ],
-    );
+    const response = await service.uploadFile(job_id, {}, [
+      {
+        originalname: '../report.txt',
+        buffer: Buffer.from('hello world'),
+      } as Express.Multer.File,
+    ]);
 
-    const storedFile = path.join(
-      storageRoot,
-      job_id,
-      'workspace',
-      'input.png',
-    );
+    const storedFile = path.join(storageRoot, job_id, 'workspace', 'input.png');
 
     assert.equal(response.filename, 'input.png');
     assert.equal(response.path_inside_container, '/workspace/input.png');
@@ -59,12 +57,7 @@ describe('JobsService.uploadFile', () => {
       });
     }) as typeof fetch;
 
-    const service = createJobsService(
-      logsStore,
-      storageRoot,
-      noopScheduler,
-      fileFetch,
-    );
+    const service = createJobsService(logsStore, storageRoot, noopScheduler, fileFetch);
     const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
     const response = await service.uploadFile(job_id, {
@@ -72,12 +65,7 @@ describe('JobsService.uploadFile', () => {
       filename: '../ignored-name.png',
     });
 
-    const storedFile = path.join(
-      storageRoot,
-      job_id,
-      'workspace',
-      'input.png',
-    );
+    const storedFile = path.join(storageRoot, job_id, 'workspace', 'input.png');
 
     assert.equal(response.filename, 'input.png');
     assert.equal(response.path_inside_container, '/workspace/input.png');
@@ -95,12 +83,7 @@ describe('JobsService.uploadFile', () => {
       });
     }) as typeof fetch;
 
-    const service = createJobsService(
-      logsStore,
-      storageRoot,
-      noopScheduler,
-      fileFetch,
-    );
+    const service = createJobsService(logsStore, storageRoot, noopScheduler, fileFetch);
     const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
     const response = await service.uploadFile(job_id, {
@@ -115,12 +98,7 @@ describe('JobsService.uploadFile', () => {
       filename: '../ignored-name.png',
     });
 
-    const storedFile = path.join(
-      storageRoot,
-      job_id,
-      'workspace',
-      'input.png',
-    );
+    const storedFile = path.join(storageRoot, job_id, 'workspace', 'input.png');
 
     assert.equal(response.filename, 'input.png');
     assert.equal(response.path_inside_container, '/workspace/input.png');
@@ -138,12 +116,7 @@ describe('JobsService.uploadFile', () => {
       });
     }) as typeof fetch;
 
-    const service = createJobsService(
-      logsStore,
-      storageRoot,
-      noopScheduler,
-      fileFetch,
-    );
+    const service = createJobsService(logsStore, storageRoot, noopScheduler, fileFetch);
     const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
     const response = await service.uploadFile(job_id, {
@@ -151,12 +124,7 @@ describe('JobsService.uploadFile', () => {
       filename: 'source.png',
     });
 
-    const storedFile = path.join(
-      storageRoot,
-      job_id,
-      'workspace',
-      'input.png',
-    );
+    const storedFile = path.join(storageRoot, job_id, 'workspace', 'input.png');
 
     assert.equal(response.filename, 'input.png');
     assert.equal(response.path_inside_container, '/workspace/input.png');
@@ -169,10 +137,7 @@ describe('JobsService.uploadFile', () => {
     const service = createJobsService(logsStore, storageRoot, noopScheduler);
     const { job_id } = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
-    await assert.rejects(
-      () => service.uploadFile(job_id, {}, []),
-      BadRequestException,
-    );
+    await assert.rejects(() => service.uploadFile(job_id, {}, []), BadRequestException);
 
     await assert.rejects(
       () =>
@@ -195,18 +160,9 @@ describe('JobsService.uploadFile', () => {
   test('rejects failed and oversized referenced downloads', async () => {
     const logsStore = createLogsStoreMock();
 
-    const failedFetch = (async () =>
-      new Response('missing', { status: 404 })) as typeof fetch;
-    const failedService = createJobsService(
-      logsStore,
-      storageRoot,
-      noopScheduler,
-      failedFetch,
-    );
-    const failedJob = await failedService.createJob(
-      createJobSpec(),
-      TEST_DOCKER_IMAGE,
-    );
+    const failedFetch = (async () => new Response('missing', { status: 404 })) as typeof fetch;
+    const failedService = createJobsService(logsStore, storageRoot, noopScheduler, failedFetch);
+    const failedJob = await failedService.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
     await assert.rejects(
       () =>
@@ -221,16 +177,8 @@ describe('JobsService.uploadFile', () => {
         status: 200,
         headers: { 'content-length': String(51 * 1024 * 1024) },
       })) as typeof fetch;
-    const oversizedService = createJobsService(
-      logsStore,
-      storageRoot,
-      noopScheduler,
-      oversizedFetch,
-    );
-    const oversizedJob = await oversizedService.createJob(
-      createJobSpec(),
-      TEST_DOCKER_IMAGE,
-    );
+    const oversizedService = createJobsService(logsStore, storageRoot, noopScheduler, oversizedFetch);
+    const oversizedJob = await oversizedService.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
     await assert.rejects(
       () =>
@@ -250,16 +198,12 @@ describe('JobsService.uploadFile', () => {
 
     await assert.rejects(
       () =>
-        service.uploadFile(
-          job_id,
-          {},
-          [
-            {
-              originalname: 'input.png',
-              buffer: Buffer.from('upload'),
-            } as Express.Multer.File,
-          ],
-        ),
+        service.uploadFile(job_id, {}, [
+          {
+            originalname: 'input.png',
+            buffer: Buffer.from('upload'),
+          } as Express.Multer.File,
+        ]),
       ConflictException,
     );
   });

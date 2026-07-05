@@ -13,21 +13,11 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { AnyFilesInterceptor } from '@nestjs/platform-express';
-import {
-  ApiBearerAuth,
-  ApiBody,
-  ApiOkResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import type {} from 'multer';
 import { BearerAuthGuard } from './shared/bearer-auth.guard';
-import {
-  CreateJobDto,
-  RunJobCommandsDto,
-  StartJobDto,
-  UploadJobFilesDto,
-} from './dto/create-job.dto';
+import { CreateJobDto, RunJobCommandsDto, StartJobDto, UploadJobFilesDto } from './dto/create-job.dto';
 import { JobsService } from './jobs.service';
 import { PublicRoute } from './shared/public-route.decorator';
 import { UploadRequestBodyLoggerInterceptor } from './shared/upload-request-body-logger.interceptor';
@@ -60,10 +50,7 @@ export class JobsController {
       required: ['goal', 'docker_image_name'],
     },
   })
-  async createJob(
-    @Body() dto: CreateJobDto,
-    @Req() request: Request,
-  ) {
+  async createJob(@Body() dto: CreateJobDto, @Req() request: Request) {
     return this.jobsService.createJob(
       { goal: dto.goal, repo_url: dto.repo_url },
       dto.docker_image_name,
@@ -137,8 +124,7 @@ export class JobsController {
       properties: {
         filename: {
           type: 'string',
-          description:
-            'Optional destination filename for the uploaded file string. Defaults to input.png.',
+          description: 'Optional destination filename for the uploaded file string. Defaults to input.png.',
         },
         openaiFileIdRefs: {
           type: 'array',
@@ -201,16 +187,8 @@ export class JobsController {
       },
     },
   })
-  startJob(
-    @Param('jobId') jobId: string,
-    @Body() dto: StartJobDto,
-    @Req() request: Request,
-  ) {
-    return this.jobsService.startJob(
-      jobId,
-      dto,
-      this.requestOrigin(request),
-    );
+  startJob(@Param('jobId') jobId: string, @Body() dto: StartJobDto, @Req() request: Request) {
+    return this.jobsService.startJob(jobId, dto, this.requestOrigin(request));
   }
 
   @Post(':jobId/commands')
@@ -241,16 +219,8 @@ export class JobsController {
       required: ['commands'],
     },
   })
-  runCommands(
-    @Param('jobId') jobId: string,
-    @Body() dto: RunJobCommandsDto,
-    @Req() request: Request,
-  ) {
-    return this.jobsService.runCommands(
-      jobId,
-      dto,
-      this.requestOrigin(request),
-    );
+  runCommands(@Param('jobId') jobId: string, @Body() dto: RunJobCommandsDto, @Req() request: Request) {
+    return this.jobsService.runCommands(jobId, dto, this.requestOrigin(request));
   }
 
   @Get(':jobId/artifacts')
@@ -266,11 +236,7 @@ export class JobsController {
     @Query('signature') signature: string,
     @Res() res: Response,
   ) {
-    const file = await this.jobsService.getArtifactFile(
-      jobId,
-      artifactPath,
-      signature,
-    );
+    const file = await this.jobsService.getArtifactFile(jobId, artifactPath, signature);
     return res.download(file.absolutePath, file.filename);
   }
 

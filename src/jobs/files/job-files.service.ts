@@ -1,20 +1,11 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Inject,
-  Injectable,
-  Optional,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, Optional } from '@nestjs/common';
 import { chmodSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { JOB_FILE_FETCH, type FileFetch } from '../shared/job.tokens';
 import { JobPathsService } from '../storage/job-paths.service';
 import { JobStore } from '../storage/job-store';
 import type { ReferencedFile } from '../shared/job.types';
-import {
-  type OpenAiFileIdRefDto,
-  UploadJobFilesDto,
-} from '../dto/create-job.dto';
+import { type OpenAiFileIdRefDto, UploadJobFilesDto } from '../dto/create-job.dto';
 
 const MAX_WORKSPACE_FILE_BYTES = 50 * 1024 * 1024;
 
@@ -23,15 +14,12 @@ export class JobFilesService {
   constructor(
     private readonly statuses: JobStore,
     private readonly paths: JobPathsService,
-    @Optional() @Inject(JOB_FILE_FETCH)
+    @Optional()
+    @Inject(JOB_FILE_FETCH)
     private readonly fileFetch: FileFetch = fetch,
   ) {}
 
-  async uploadFile(
-    jobId: string,
-    dto: UploadJobFilesDto,
-    files: Express.Multer.File[] = [],
-  ) {
+  async uploadFile(jobId: string, dto: UploadJobFilesDto, files: Express.Multer.File[] = []) {
     const status = await this.statuses.readJob(jobId);
     if (status.status === 'running') {
       throw new ConflictException('Cannot upload files while the job is running');
@@ -79,44 +67,29 @@ export class JobFilesService {
   private async fetchReferencedFile(fileRef: ReferencedFile) {
     const downloadUrl = fileRef.download_url ?? fileRef.download_link;
     if (!downloadUrl) {
-      throw new BadRequestException(
-        `Missing download URL for referenced file: ${fileRef.name}`,
-      );
+      throw new BadRequestException(`Missing download URL for referenced file: ${fileRef.name}`);
     }
 
     const response = await this.fileFetch(downloadUrl);
 
     if (!response.ok) {
-      throw new BadRequestException(
-        `Failed to download referenced file: ${fileRef.name}`,
-      );
+      throw new BadRequestException(`Failed to download referenced file: ${fileRef.name}`);
     }
 
     const contentLength = response.headers.get('content-length');
-    if (
-      contentLength &&
-      Number.isFinite(Number(contentLength)) &&
-      Number(contentLength) > MAX_WORKSPACE_FILE_BYTES
-    ) {
-      throw new BadRequestException(
-        `Referenced file is too large: ${fileRef.name}`,
-      );
+    if (contentLength && Number.isFinite(Number(contentLength)) && Number(contentLength) > MAX_WORKSPACE_FILE_BYTES) {
+      throw new BadRequestException(`Referenced file is too large: ${fileRef.name}`);
     }
 
     const buffer = Buffer.from(await response.arrayBuffer());
     if (buffer.byteLength > MAX_WORKSPACE_FILE_BYTES) {
-      throw new BadRequestException(
-        `Referenced file is too large: ${fileRef.name}`,
-      );
+      throw new BadRequestException(`Referenced file is too large: ${fileRef.name}`);
     }
 
     return buffer;
   }
 
-  private normalizeOpenAiFileRef(
-    ref: string | OpenAiFileIdRefDto,
-    fallbackName: string,
-  ): ReferencedFile {
+  private normalizeOpenAiFileRef(ref: string | OpenAiFileIdRefDto, fallbackName: string): ReferencedFile {
     if (typeof ref === 'string') {
       const downloadUrl = ref.trim();
       return {

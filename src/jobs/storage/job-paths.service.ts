@@ -1,15 +1,5 @@
-import {
-  Inject,
-  Injectable,
-  Optional,
-} from '@nestjs/common';
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  statSync,
-} from 'node:fs';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { chmodSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { JOB_STORAGE_ROOT } from '../shared/job.tokens';
 
@@ -17,9 +7,7 @@ import { JOB_STORAGE_ROOT } from '../shared/job.tokens';
 export class JobPathsService {
   private readonly appRoot: string;
 
-  constructor(
-    @Optional() @Inject(JOB_STORAGE_ROOT) storageRoot?: string,
-  ) {
+  constructor(@Optional() @Inject(JOB_STORAGE_ROOT) storageRoot?: string) {
     this.appRoot = storageRoot || path.resolve(process.cwd(), 'storage');
     mkdirSync(this.appRoot, { recursive: true });
   }

@@ -1,10 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import {
-  AVAILABLE_DOCKER_IMAGE_SEEDS,
-  seedAvailableDockerImages,
-} from '../../src/seeds/available-docker-images.seed';
+import { AVAILABLE_DOCKER_IMAGE_SEEDS, seedAvailableDockerImages } from '../../src/seeds/available-docker-images.seed';
 
 describe('seedAvailableDockerImages', () => {
   test('upserts the spritefusion runner image seed', async () => {

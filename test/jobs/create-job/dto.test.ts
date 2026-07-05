@@ -2,12 +2,7 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
-import {
-  CreateJobDto,
-  RunJobCommandsDto,
-  StartJobDto,
-  UploadJobFilesDto,
-} from '../../../src/jobs/dto/create-job.dto';
+import { CreateJobDto, RunJobCommandsDto, StartJobDto, UploadJobFilesDto } from '../../../src/jobs/dto/create-job.dto';
 import { TEST_DOCKER_IMAGE } from './shared';
 
 describe('CreateJobDto', () => {
@@ -30,10 +25,7 @@ describe('CreateJobDto', () => {
     );
 
     assert.ok(result instanceof CreateJobDto);
-    assert.equal(
-      result.goal,
-      'Run the repository tests and summarize failures.',
-    );
+    assert.equal(result.goal, 'Run the repository tests and summarize failures.');
     assert.equal(result.repo_url, 'https://github.com/pallets/flask.git');
   });
 
@@ -283,10 +275,7 @@ describe('UploadJobFilesDto', () => {
         }
       | undefined;
 
-    assert.equal(
-      firstRef?.download_url,
-      'file-service://files/input.png',
-    );
+    assert.equal(firstRef?.download_url, 'file-service://files/input.png');
     assert.equal(firstRef?.download_link, 'file-service://files/input.png');
     assert.equal(firstRef?.name, 'input.png');
   });
@@ -319,14 +308,8 @@ describe('UploadJobFilesDto', () => {
         }
       | undefined;
 
-    assert.equal(
-      firstRef?.name,
-      'feef984b-2531-4ac6-a4c6-d8eb45097a4f.png',
-    );
-    assert.equal(
-      firstRef?.download_link,
-      'https://files.example.test/a',
-    );
+    assert.equal(firstRef?.name, 'feef984b-2531-4ac6-a4c6-d8eb45097a4f.png');
+    assert.equal(firstRef?.download_link, 'https://files.example.test/a');
     assert.equal(firstRef?.id, 'file_00000000fddc72438aa508d29872311d');
     assert.equal(firstRef?.mime_type, 'image/png');
   });
@@ -356,10 +339,7 @@ describe('UploadJobFilesDto', () => {
         openaiFileIdRefs: [123],
       },
       {
-        openaiFileIdRefs: [
-          'https://files.example.test/1',
-          'https://files.example.test/2',
-        ],
+        openaiFileIdRefs: ['https://files.example.test/1', 'https://files.example.test/2'],
       },
     ];
 

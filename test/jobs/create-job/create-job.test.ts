@@ -31,24 +31,14 @@ describe('JobsService.createJob', () => {
     const logsStore = createLogsStoreMock();
     const jobStore = createJobStoreMock();
     const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
-    const response = await service.createJob(
-      createJobSpec(),
-      TEST_DOCKER_IMAGE,
-      'https://api.example.test',
-    );
+    const response = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE, 'https://api.example.test');
 
     assert.match(response.job_id, /^[0-9a-f-]{36}$/i);
     assert.equal(response.status, 'queued');
     assert.equal(response.goal, 'Run the repository test suite.');
     assert.equal(response.repo_url, 'https://github.com/pallets/flask.git');
-    assert.equal(
-      response.status_url,
-      `https://api.example.test/jobs/${response.job_id}`,
-    );
-    assert.equal(
-      response.artifacts_url,
-      `https://api.example.test/jobs/${response.job_id}/artifacts`,
-    );
+    assert.equal(response.status_url, `https://api.example.test/jobs/${response.job_id}`);
+    assert.equal(response.artifacts_url, `https://api.example.test/jobs/${response.job_id}/artifacts`);
 
     assert.deepEqual(jobStore.entries.get(response.job_id), {
       job_id: response.job_id,
@@ -95,10 +85,7 @@ describe('JobsService.createJob', () => {
       const logsStore = createLogsStoreMock();
       const jobStore = createJobStoreMock();
       const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);
-      const response = await service.createJob(
-        createJobSpec(),
-        TEST_DOCKER_IMAGE,
-      );
+      const response = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE);
 
       const storageJobDir = path.join(storageRoot, response.job_id);
 
@@ -117,20 +104,10 @@ describe('JobsService.createJob', () => {
     try {
       const logsStore = createLogsStoreMock();
       const service = createJobsService(logsStore, storageRoot, noopScheduler);
-      const response = await service.createJob(
-        createJobSpec(),
-        TEST_DOCKER_IMAGE,
-        'https://request.example.test',
-      );
+      const response = await service.createJob(createJobSpec(), TEST_DOCKER_IMAGE, 'https://request.example.test');
 
-      assert.equal(
-        response.status_url,
-        `https://public.example.test/jobs/${response.job_id}`,
-      );
-      assert.equal(
-        response.artifacts_url,
-        `https://public.example.test/jobs/${response.job_id}/artifacts`,
-      );
+      assert.equal(response.status_url, `https://public.example.test/jobs/${response.job_id}`);
+      assert.equal(response.artifacts_url, `https://public.example.test/jobs/${response.job_id}/artifacts`);
     } finally {
       if (previousPublicBaseUrl === undefined) {
         delete process.env.PUBLIC_BASE_URL;

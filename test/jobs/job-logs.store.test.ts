@@ -32,9 +32,7 @@ function createQuery(entries: LogEntry[]) {
       return this;
     },
     cursor() {
-      const ordered = [...entries].sort(
-        (left, right) => right.created_at.getTime() - left.created_at.getTime(),
-      );
+      const ordered = [...entries].sort((left, right) => right.created_at.getTime() - left.created_at.getTime());
       return createCursor(ordered.slice(0, limit));
     },
   };
@@ -113,11 +111,11 @@ describe('JobLogsStore', () => {
   test('rejects startup when the connection cannot be established', async () => {
     const store = new JobLogsStore();
 
-    mongooseAny.createConnection = ((() => ({
+    mongooseAny.createConnection = (() => ({
       asPromise: async () => {
         throw new Error('mongo is down');
       },
-    })) as unknown) as typeof mongoose.createConnection;
+    })) as unknown as typeof mongoose.createConnection;
 
     await assert.rejects(() => store.onModuleInit(), /mongo is down/);
   });

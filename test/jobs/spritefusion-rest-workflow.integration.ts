@@ -37,15 +37,8 @@ interface ArtifactList {
   }>;
 }
 
-const fixturePath = path.resolve(
-  __dirname,
-  '..',
-  '..',
-  'storage',
-  'images',
-  'cat-icon-gpt.png',
-);
-const runnerImage = 'gpt-runner:bookworm';
+const fixturePath = path.resolve(__dirname, '..', '..', 'storage', 'images', 'cat-icon-gpt.png');
+const runnerImage = 'gpt-runner:spritefusion';
 
 describe('SpriteFusion Pixel Snapper REST workflow', () => {
   let app: INestApplication | undefined;
@@ -124,26 +117,13 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
     jobId = created.job_id;
     assert.match(created.job_id, /^[0-9a-f-]{36}$/i);
     assert.equal(created.status, 'queued');
-    assert.equal(
-      created.goal,
-      'Run the SpriteFusion pixel snapper workflow.',
-    );
-    assert.equal(
-      created.repo_url,
-      'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git',
-    );
+    assert.equal(created.goal, 'Run the SpriteFusion pixel snapper workflow.');
+    assert.equal(created.repo_url, 'https://github.com/Hugo-Dz/spritefusion-pixel-snapper.git');
     assert.equal(created.status_url, `${baseUrl}/jobs/${created.job_id}`);
-    assert.equal(
-      created.artifacts_url,
-      `${baseUrl}/jobs/${created.job_id}/artifacts`,
-    );
+    assert.equal(created.artifacts_url, `${baseUrl}/jobs/${created.job_id}/artifacts`);
 
     const uploadForm = new FormData();
-    uploadForm.set(
-      'file',
-      new Blob([readFileSync(fixturePath)], { type: 'image/png' }),
-      'cat-icon-gpt.png',
-    );
+    uploadForm.set('file', new Blob([readFileSync(fixturePath)], { type: 'image/png' }), 'cat-icon-gpt.png');
 
     const uploaded = await requestJson<{
       job_id: string;
@@ -159,60 +139,50 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
     assert.equal(uploaded.filename, 'input.png');
     assert.equal(uploaded.path_inside_container, '/workspace/input.png');
 
-    const started = await requestJson<JobEnvelope>(
-      `${baseUrl}/jobs/${created.job_id}/start`,
-      {
-        method: 'POST',
-        headers: {
-          ...authHeaders(),
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          timeout_seconds: 900,
-          network: 'on',
-        }),
+    const started = await requestJson<JobEnvelope>(`${baseUrl}/jobs/${created.job_id}/start`, {
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+        'content-type': 'application/json',
       },
-    );
+      body: JSON.stringify({
+        timeout_seconds: 900,
+        network: 'on',
+      }),
+    });
 
     assert.equal(started.job_id, created.job_id);
     assert.equal(started.status, 'running');
 
-    const bootstrapped = await waitForTerminalStatus(
-      `${baseUrl}/jobs/${created.job_id}`,
-    );
+    const bootstrapped = await waitForTerminalStatus(`${baseUrl}/jobs/${created.job_id}`);
     assert.equal(
       bootstrapped.status,
       'success',
       `expected SpriteFusion bootstrap to succeed; logs tail:\n${bootstrapped.logs_tail ?? ''}`,
     );
 
-    const commandStarted = await requestJson<JobEnvelope>(
-      `${baseUrl}/jobs/${created.job_id}/commands`,
-      {
-        method: 'POST',
-        headers: {
-          ...authHeaders(),
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          commands: [
-            'export RUSTUP_INIT_SKIP_PATH_CHECK=yes',
-            'curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal',
-            '. "$HOME/.cargo/env"',
-            'cargo run --release -- ../input.png /artifacts/cat-icon-gpt-snapped.png 16',
-          ],
-          timeout_seconds: 900,
-          network: 'on',
-        }),
+    const commandStarted = await requestJson<JobEnvelope>(`${baseUrl}/jobs/${created.job_id}/commands`, {
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+        'content-type': 'application/json',
       },
-    );
+      body: JSON.stringify({
+        commands: [
+          'export RUSTUP_INIT_SKIP_PATH_CHECK=yes',
+          'curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal',
+          '. "$HOME/.cargo/env"',
+          'cargo run --release -- ../input.png /artifacts/cat-icon-gpt-snapped.png 16',
+        ],
+        timeout_seconds: 900,
+        network: 'on',
+      }),
+    });
 
     assert.equal(commandStarted.job_id, created.job_id);
     assert.equal(commandStarted.status, 'running');
 
-    const finalStatus = await waitForTerminalStatus(
-      `${baseUrl}/jobs/${created.job_id}`,
-    );
+    const finalStatus = await waitForTerminalStatus(`${baseUrl}/jobs/${created.job_id}`);
     assert.equal(
       finalStatus.status,
       'success',
@@ -220,33 +190,17 @@ describe('SpriteFusion Pixel Snapper REST workflow', () => {
     );
     assert.equal(finalStatus.return_code, 0);
 
-    const artifactList = await requestJson<ArtifactList>(
-      `${baseUrl}/jobs/${created.job_id}/artifacts`,
-      {
-        headers: authHeaders(),
-      },
-    );
+    const artifactList = await requestJson<ArtifactList>(`${baseUrl}/jobs/${created.job_id}/artifacts`, {
+      headers: authHeaders(),
+    });
 
-    const output = artifactList.artifacts.find(
-      (artifact) => artifact.name === 'cat-icon-gpt-snapped.png',
-    );
-    assert.ok(
-      output,
-      `expected cat-icon-gpt-snapped.png artifact, got ${JSON.stringify(
-        artifactList.artifacts,
-      )}`,
-    );
+    const output = artifactList.artifacts.find((artifact) => artifact.name === 'cat-icon-gpt-snapped.png');
+    assert.ok(output, `expected cat-icon-gpt-snapped.png artifact, got ${JSON.stringify(artifactList.artifacts)}`);
     assert.ok(output.size_bytes > 0);
 
     const downloadUrl = new URL(output.download_url);
-    assert.equal(
-      downloadUrl.origin + downloadUrl.pathname,
-      `${baseUrl}/jobs/${created.job_id}/artifact`,
-    );
-    assert.equal(
-      downloadUrl.searchParams.get('path'),
-      'cat-icon-gpt-snapped.png',
-    );
+    assert.equal(downloadUrl.origin + downloadUrl.pathname, `${baseUrl}/jobs/${created.job_id}/artifact`);
+    assert.equal(downloadUrl.searchParams.get('path'), 'cat-icon-gpt-snapped.png');
     assert.match(downloadUrl.searchParams.get('signature') ?? '', /^[0-9a-f]{64}$/);
 
     const download = await fetch(output.download_url);
@@ -305,9 +259,7 @@ function createInMemoryLogsStore() {
     tail: async (jobId: string, maxBytes: number) => {
       const text = (logs.get(jobId) ?? []).join('');
       const buffer = Buffer.from(text, 'utf8');
-      return buffer.length > maxBytes
-        ? buffer.subarray(buffer.length - maxBytes).toString('utf8')
-        : text;
+      return buffer.length > maxBytes ? buffer.subarray(buffer.length - maxBytes).toString('utf8') : text;
     },
     deleteByJobId: async (jobId: string) => {
       logs.delete(jobId);
@@ -323,9 +275,7 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   const text = await response.text();
 
   if (!response.ok) {
-    throw new Error(
-      `Request failed: ${init.method ?? 'GET'} ${url} ${response.status} ${text}`,
-    );
+    throw new Error(`Request failed: ${init.method ?? 'GET'} ${url} ${response.status} ${text}`);
   }
 
   return JSON.parse(text) as T;
@@ -340,22 +290,14 @@ async function waitForTerminalStatus(url: string): Promise<JobStatus> {
       headers: authHeaders(),
     });
 
-    if (
-      lastStatus.status === 'success' ||
-      lastStatus.status === 'failed' ||
-      lastStatus.status === 'timeout'
-    ) {
+    if (lastStatus.status === 'success' || lastStatus.status === 'failed' || lastStatus.status === 'timeout') {
       return lastStatus;
     }
 
     await delay(2_000);
   }
 
-  throw new Error(
-    `Timed out waiting for SpriteFusion job; last status: ${JSON.stringify(
-      lastStatus,
-    )}`,
-  );
+  throw new Error(`Timed out waiting for SpriteFusion job; last status: ${JSON.stringify(lastStatus)}`);
 }
 
 function delay(ms: number) {
@@ -374,7 +316,7 @@ function dockerUnavailableReason() {
       stdio: 'ignore',
     });
   } catch {
-    return `Runner image ${runnerImage} is missing; build it with: docker build -t ${runnerImage} ./images`;
+    return `Runner image ${runnerImage} is missing; build it with: npm run build:images`;
   }
 
   return '';

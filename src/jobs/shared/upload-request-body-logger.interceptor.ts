@@ -1,10 +1,4 @@
-import {
-  CallHandler,
-  ExecutionContext,
-  Injectable,
-  Logger,
-  NestInterceptor,
-} from '@nestjs/common';
+import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } from '@nestjs/common';
 import type { Request } from 'express';
 import type { Observable } from 'rxjs';
 
@@ -16,11 +10,7 @@ export class UploadRequestBodyLoggerInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest<Request>();
     const jobId = request.params.jobId ?? 'unknown';
 
-    this.logger.log(
-      `POST /jobs/${jobId}/files request body: ${this.stringifyBody(
-        request.body,
-      )}`,
-    );
+    this.logger.log(`POST /jobs/${jobId}/files request body: ${this.stringifyBody(request.body)}`);
 
     return next.handle();
   }

@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import mongoose, { Connection, Model } from 'mongoose';
 import { JOB_MODEL_NAME, jobSchema, type JobDocument } from '../schemas/job.schema';
 import type { JobStatus, JobSummary } from '../shared/job.types';
@@ -28,11 +24,7 @@ export class JobStore {
     });
 
     this.connection = await connection.asPromise();
-    this.jobModel = this.connection.model<JobDocument>(
-      JOB_MODEL_NAME,
-      jobSchema,
-      this.collectionName,
-    );
+    this.jobModel = this.connection.model<JobDocument>(JOB_MODEL_NAME, jobSchema, this.collectionName);
 
     await this.jobModel.init();
   }

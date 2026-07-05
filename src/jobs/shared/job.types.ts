@@ -1,10 +1,4 @@
-export type JobState =
-  | 'queued'
-  | 'running'
-  | 'success'
-  | 'failed'
-  | 'timeout'
-  | 'deleted';
+export type JobState = 'queued' | 'running' | 'success' | 'failed' | 'timeout' | 'deleted';
 
 export interface JobSpec {
   goal: string;

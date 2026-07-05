@@ -15,9 +15,7 @@ export const noopScheduler = (() => {
   }) as typeof setImmediate;
 })();
 
-export function createJobSpec(
-  overrides: Partial<{ goal: string; repo_url?: string }> = {},
-) {
+export function createJobSpec(overrides: Partial<{ goal: string; repo_url?: string }> = {}) {
   return {
     goal: 'Run the repository test suite.',
     repo_url: 'https://github.com/pallets/flask.git',
@@ -50,13 +48,11 @@ export function createJobStoreMock(initialJobs: JobStatus[] = []) {
       entries.delete(jobId);
     },
     listJobs: async () =>
-      [...entries.values()]
-        .map(cloneJob)
-        .sort((left, right) => {
-          const rightTime = Date.parse(right.updated_at) || Date.parse(right.created_at);
-          const leftTime = Date.parse(left.updated_at) || Date.parse(left.created_at);
-          return rightTime - leftTime;
-        }),
+      [...entries.values()].map(cloneJob).sort((left, right) => {
+        const rightTime = Date.parse(right.updated_at) || Date.parse(right.created_at);
+        const leftTime = Date.parse(left.updated_at) || Date.parse(left.created_at);
+        return rightTime - leftTime;
+      }),
     listQueuedJobs: async () =>
       [...entries.values()]
         .filter((job) => job.status === 'queued')
@@ -89,12 +85,8 @@ export function createJobsService(
   fileFetchOrJobStore?: typeof fetch | ReturnType<typeof createJobStoreMock>,
   jobStore = createJobStoreMock(),
 ) {
-  const fileFetch =
-    typeof fileFetchOrJobStore === 'function' ? fileFetchOrJobStore : undefined;
-  const store =
-    typeof fileFetchOrJobStore === 'function'
-      ? jobStore
-      : fileFetchOrJobStore ?? jobStore;
+  const fileFetch = typeof fileFetchOrJobStore === 'function' ? fileFetchOrJobStore : undefined;
+  const store = typeof fileFetchOrJobStore === 'function' ? jobStore : (fileFetchOrJobStore ?? jobStore);
 
   return new JobsService(
     logsStore,

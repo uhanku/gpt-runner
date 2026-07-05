@@ -19,6 +19,7 @@ async function bootstrap() {
     .setTitle('GPT Container Experiment API')
     .setDescription('Creates temporary Docker containers for code experiments.')
     .setVersion('0.1.0')
+    .setOpenAPIVersion('3.1.0')
     .addBearerAuth(
       {
         type: 'http',
@@ -52,9 +53,7 @@ async function bootstrap() {
     const message = error instanceof Error ? error.message : String(error);
 
     if (message.includes('listen EPERM')) {
-      process.stderr.write(
-        `[gpt-runner] HTTP listener unavailable in this environment: ${message}\n`,
-      );
+      process.stderr.write(`[gpt-runner] HTTP listener unavailable in this environment: ${message}\n`);
       return;
     }
 

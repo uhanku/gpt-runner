@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { JobUrlService } from '../job-url.service';

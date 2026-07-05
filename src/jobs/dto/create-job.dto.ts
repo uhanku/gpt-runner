@@ -17,10 +17,7 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-function normalizeOpenAiFileRefs(
-  value: unknown,
-  fallbackName = 'input.png',
-) {
+function normalizeOpenAiFileRefs(value: unknown, fallbackName = 'input.png') {
   const normalizeSingle = (ref: unknown, fallbackName: string) => {
     if (typeof ref === 'string') {
       const trimmed = ref.trim();
@@ -41,10 +38,7 @@ function normalizeOpenAiFileRefs(
 
     const fileRef = ref as Record<string, unknown>;
     return {
-      name:
-        typeof fileRef.name === 'string' && fileRef.name.trim()
-          ? fileRef.name.trim()
-          : fileRef.name,
+      name: typeof fileRef.name === 'string' && fileRef.name.trim() ? fileRef.name.trim() : fileRef.name,
       id: fileRef.id,
       mime_type: fileRef.mime_type,
       download_url:
@@ -73,9 +67,7 @@ function normalizeOpenAiFileRefs(
 
   try {
     const parsed = JSON.parse(trimmed);
-    return Array.isArray(parsed)
-      ? parsed.map((ref) => normalizeSingle(ref, fallbackName))
-      : parsed;
+    return Array.isArray(parsed) ? parsed.map((ref) => normalizeSingle(ref, fallbackName)) : parsed;
   } catch {
     return value;
   }
@@ -90,9 +82,7 @@ export class OpenAiFileIdRefDto {
 }
 
 @ValidatorConstraint({ name: 'openAiFileIdRefs', async: false })
-class OpenAiFileIdRefsConstraint
-  implements ValidatorConstraintInterface
-{
+class OpenAiFileIdRefsConstraint implements ValidatorConstraintInterface {
   validate(value: unknown, _args: ValidationArguments) {
     if (!Array.isArray(value)) {
       return false;
@@ -108,14 +98,9 @@ class OpenAiFileIdRefsConstraint
       }
 
       const fileRef = item as Record<string, unknown>;
-      const hasName =
-        typeof fileRef.name === 'string' && fileRef.name.trim().length > 0;
-      const hasDownloadUrl =
-        typeof fileRef.download_url === 'string' &&
-        fileRef.download_url.trim().length > 0;
-      const hasDownloadLink =
-        typeof fileRef.download_link === 'string' &&
-        fileRef.download_link.trim().length > 0;
+      const hasName = typeof fileRef.name === 'string' && fileRef.name.trim().length > 0;
+      const hasDownloadUrl = typeof fileRef.download_url === 'string' && fileRef.download_url.trim().length > 0;
+      const hasDownloadLink = typeof fileRef.download_link === 'string' && fileRef.download_link.trim().length > 0;
 
       return hasName && (hasDownloadUrl || hasDownloadLink);
     });
@@ -129,7 +114,7 @@ class OpenAiFileIdRefsConstraint
 export class CreateJobDto {
   @ApiProperty({
     description: 'Docker image name used to run the job.',
-    example: 'gpt-runner:bookworm',
+    example: 'gpt-runner:spritefusion',
   })
   @IsString()
   docker_image_name!: string;
@@ -173,8 +158,7 @@ class JobExecutionOptionsDto {
   network?: 'on' | 'off' = 'on';
 
   @ApiPropertyOptional({
-    description:
-      'Run as root inside the disposable container. Needed for apt install. Riskier.',
+    description: 'Run as root inside the disposable container. Needed for apt install. Riskier.',
     default: false,
   })
   @IsOptional()
@@ -253,8 +237,7 @@ export class UploadJobFilesDto {
   filename?: string;
 
   @ApiPropertyOptional({
-    description:
-      'ChatGPT Action file reference string or file object to download into /workspace/input.png.',
+    description: 'ChatGPT Action file reference string or file object to download into /workspace/input.png.',
     type: [String],
     maxItems: 1,
     items: {
@@ -278,9 +261,7 @@ export class UploadJobFilesDto {
   @Transform(({ value, obj }) =>
     normalizeOpenAiFileRefs(
       value,
-      typeof obj?.filename === 'string' && obj.filename.trim()
-        ? obj.filename.trim()
-        : 'input.png',
+      typeof obj?.filename === 'string' && obj.filename.trim() ? obj.filename.trim() : 'input.png',
     ),
   )
   @IsArray()

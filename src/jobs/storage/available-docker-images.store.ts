@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import mongoose, { Connection, Model } from 'mongoose';
 import {
   AVAILABLE_DOCKER_IMAGE_MODEL_NAME,
@@ -46,18 +43,12 @@ export class AvailableDockerImagesStore {
   }
 
   async upsert(image: AvailableDockerImageDocument) {
-    await this.imagesModel().updateOne(
-      { name: image.name },
-      { $set: image },
-      { upsert: true },
-    );
+    await this.imagesModel().updateOne({ name: image.name }, { $set: image }, { upsert: true });
   }
 
   private imagesModel(): Model<AvailableDockerImageDocument> {
     if (!this.imageModel) {
-      throw new InternalServerErrorException(
-        'Mongo available docker image store is not ready.',
-      );
+      throw new InternalServerErrorException('Mongo available docker image store is not ready.');
     }
 
     return this.imageModel;

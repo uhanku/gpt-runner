@@ -90,10 +90,7 @@ export class JobRunnerService {
 
     const timer = setTimeout(() => {
       timedOut = true;
-      this.appendLog(
-        jobId,
-        '\n[gpt-runner] timeout reached; killing container\n',
-      );
+      this.appendLog(jobId, '\n[gpt-runner] timeout reached; killing container\n');
       this.forceRemoveContainer(jobId);
       child.kill('SIGKILL');
     }, timeoutSeconds * 1000);
@@ -108,10 +105,7 @@ export class JobRunnerService {
 
     child.on('error', (error) => {
       clearTimeout(timer);
-      this.appendLog(
-        jobId,
-        `\n[gpt-runner] ${phase} controller error: ${error}\n`,
-      );
+      this.appendLog(jobId, `\n[gpt-runner] ${phase} controller error: ${error}\n`);
 
       void this.statuses
         .readJob(jobId)
@@ -166,9 +160,7 @@ export class JobRunnerService {
 
   appendLog(jobId: string, text: string) {
     void this.logs.append(jobId, text).catch((error) => {
-      process.stderr.write(
-        `[gpt-runner] failed to persist log chunk for ${jobId}: ${String(error)}\n`,
-      );
+      process.stderr.write(`[gpt-runner] failed to persist log chunk for ${jobId}: ${String(error)}\n`);
     });
   }
 

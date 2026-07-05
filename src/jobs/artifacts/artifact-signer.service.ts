@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 @Injectable()
@@ -15,11 +11,7 @@ export class ArtifactSignerService {
       .digest('hex');
   }
 
-  verifyArtifactSignature(
-    jobId: string,
-    artifactPath: string,
-    signature: string,
-  ) {
+  verifyArtifactSignature(jobId: string, artifactPath: string, signature: string) {
     if (!signature) {
       throw new UnauthorizedException('Missing artifact signature');
     }
@@ -28,10 +20,7 @@ export class ArtifactSignerService {
       throw new UnauthorizedException('Invalid artifact signature');
     }
 
-    const expected = Buffer.from(
-      this.signArtifactPath(jobId, artifactPath),
-      'hex',
-    );
+    const expected = Buffer.from(this.signArtifactPath(jobId, artifactPath), 'hex');
     const actual = Buffer.from(signature, 'hex');
 
     if (!timingSafeEqual(expected, actual)) {
@@ -47,9 +36,7 @@ export class ArtifactSignerService {
     const secret = process.env.PUBLIC_ARTIFACT_SECRET;
 
     if (!secret) {
-      throw new InternalServerErrorException(
-        'Server misconfigured: PUBLIC_ARTIFACT_SECRET is not set.',
-      );
+      throw new InternalServerErrorException('Server misconfigured: PUBLIC_ARTIFACT_SECRET is not set.');
     }
 
     return secret;

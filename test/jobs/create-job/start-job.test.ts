@@ -2,10 +2,7 @@ import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
 import { afterEach, beforeEach, describe, test } from 'node:test';
 import { ConflictException } from '@nestjs/common';
-import {
-  RunJobCommandsDto,
-  StartJobDto,
-} from '../../../src/jobs/dto/create-job.dto';
+import { RunJobCommandsDto, StartJobDto } from '../../../src/jobs/dto/create-job.dto';
 import {
   createJobSpec,
   createJobStoreMock,
@@ -56,10 +53,7 @@ describe('JobsService.startJob', () => {
     assert.equal(response.goal, 'Run the repository test suite.');
     assert.equal(response.repo_url, 'https://github.com/pallets/flask.git');
     assert.equal(response.status_url, `https://api.example.test/jobs/${job_id}`);
-    assert.equal(
-      response.artifacts_url,
-      `https://api.example.test/jobs/${job_id}/artifacts`,
-    );
+    assert.equal(response.artifacts_url, `https://api.example.test/jobs/${job_id}/artifacts`);
 
     assert.equal(jobStore.entries.get(job_id)?.status, 'running');
     assert.equal(jobStore.entries.get(job_id)?.return_code, null);
@@ -86,10 +80,7 @@ describe('JobsService.startJob', () => {
 
     assert.equal(response.job_id, created.job_id);
     assert.equal(response.status, 'running');
-    assert.equal(
-      response.goal,
-      'Run the repository tests after cloning the repo.',
-    );
+    assert.equal(response.goal, 'Run the repository tests after cloning the repo.');
     assert.equal(response.repo_url, 'https://github.com/pallets/flask.git');
   });
 
@@ -119,12 +110,7 @@ describe('JobsService.startJob', () => {
           docker_image_name: TEST_DOCKER_IMAGE,
         },
       ]);
-      const stateService = createJobsService(
-        logsStore,
-        storageRoot,
-        scheduler,
-        jobStore,
-      );
+      const stateService = createJobsService(logsStore, storageRoot, scheduler, jobStore);
 
       const response = await stateService.startJob(job_id, {
         repo_url: 'https://github.com/example/queued.git',
@@ -156,16 +142,15 @@ describe('JobsService.bootstrapScript', () => {
   test('clones the repo and installs workspace dependencies when present', () => {
     const logsStore = createLogsStoreMock();
     const service = createJobsService(logsStore);
-    const script = (service as unknown as {
-      bootstrapScript(dto: StartJobDto): string;
-    }).bootstrapScript({
+    const script = (
+      service as unknown as {
+        bootstrapScript(dto: StartJobDto): string;
+      }
+    ).bootstrapScript({
       repo_url: 'https://github.com/pallets/flask.git',
     });
 
-    assert.match(
-      script,
-      /git clone 'https:\/\/github\.com\/pallets\/flask\.git' repo/,
-    );
+    assert.match(script, /git clone 'https:\/\/github\.com\/pallets\/flask\.git' repo/);
     assert.match(script, /cargo fetch/);
     assert.match(script, /python -m pip install -e \./);
     assert.doesNotMatch(script, /python -m pip install 'pytest<9'/);
@@ -176,75 +161,61 @@ describe('JobsService.commandsScript', () => {
   test('starts directly with commands when no repo URL is provided', () => {
     const logsStore = createLogsStoreMock();
     const service = createJobsService(logsStore);
-    const script = (service as unknown as {
-      commandsScript(dto: RunJobCommandsDto): string;
-    }).commandsScript({
+    const script = (
+      service as unknown as {
+        commandsScript(dto: RunJobCommandsDto): string;
+      }
+    ).commandsScript({
       commands: ['python3 --version', 'pytest'],
     });
 
     assert.doesNotMatch(script, /git clone/);
     assert.match(script, /if \[ -d repo \]; then/);
     assert.match(script, /\n  cd repo\n/);
-    assert.ok(
-      script.indexOf("echo '[gpt-runner] running commands'") <
-        script.indexOf('\npython3 --version'),
-    );
+    assert.ok(script.indexOf("echo '[gpt-runner] running commands'") < script.indexOf('\npython3 --version'));
   });
 
   test('installs pytest in the job venv when the script runs pytest', () => {
     const logsStore = createLogsStoreMock();
     const service = createJobsService(logsStore);
-    const script = (service as unknown as {
-      commandsScript(dto: RunJobCommandsDto): string;
-    }).commandsScript({
-      commands: [
-        'python3 --version',
-        'python3 -m venv .venv',
-        '. .venv/bin/activate && pytest',
-      ],
+    const script = (
+      service as unknown as {
+        commandsScript(dto: RunJobCommandsDto): string;
+      }
+    ).commandsScript({
+      commands: ['python3 --version', 'python3 -m venv .venv', '. .venv/bin/activate && pytest'],
     });
 
     assert.match(script, /python -m pip install 'pytest<9'/);
-    assert.match(
-      script,
-      /data = tomllib\.loads\(pyproject\.read_text\("utf8"\)\)/,
-    );
-    assert.match(
-      script,
-      /python -m pip install -r \/tmp\/gpt-runner-test-requirements\.txt/,
-    );
-    assert.ok(
-      script.indexOf('python3 -m venv .venv') <
-        script.indexOf("python -m pip install 'pytest<9'"),
-    );
-    assert.ok(
-      script.indexOf("python -m pip install 'pytest<9'") <
-        script.indexOf('. .venv/bin/activate && pytest'),
-    );
+    assert.match(script, /data = tomllib\.loads\(pyproject\.read_text\("utf8"\)\)/);
+    assert.match(script, /python -m pip install -r \/tmp\/gpt-runner-test-requirements\.txt/);
+    assert.ok(script.indexOf('python3 -m venv .venv') < script.indexOf("python -m pip install 'pytest<9'"));
+    assert.ok(script.indexOf("python -m pip install 'pytest<9'") < script.indexOf('. .venv/bin/activate && pytest'));
   });
 
   test('guards pytest bootstrap when no venv setup command is present', () => {
     const logsStore = createLogsStoreMock();
     const service = createJobsService(logsStore);
-    const script = (service as unknown as {
-      commandsScript(dto: RunJobCommandsDto): string;
-    }).commandsScript({
+    const script = (
+      service as unknown as {
+        commandsScript(dto: RunJobCommandsDto): string;
+      }
+    ).commandsScript({
       commands: ['python3 --version', 'pytest'],
     });
 
     assert.match(script, /python -m pip install 'pytest<9'/);
-    assert.ok(
-      script.indexOf("python -m pip install 'pytest<9'") <
-        script.indexOf('\npytest'),
-    );
+    assert.ok(script.indexOf("python -m pip install 'pytest<9'") < script.indexOf('\npytest'));
   });
 
   test('does not add pytest bootstrap for non-pytest scripts', () => {
     const logsStore = createLogsStoreMock();
     const service = createJobsService(logsStore);
-    const script = (service as unknown as {
-      commandsScript(dto: RunJobCommandsDto): string;
-    }).commandsScript({
+    const script = (
+      service as unknown as {
+        commandsScript(dto: RunJobCommandsDto): string;
+      }
+    ).commandsScript({
       commands: ['python3 --version', 'echo done'],
     });
 

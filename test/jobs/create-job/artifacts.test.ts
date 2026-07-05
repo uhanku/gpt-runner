@@ -44,11 +44,7 @@ describe('JobsService.listArtifacts', () => {
 
     const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
     mkdirSync(path.join(artifactsDir, 'nested'), { recursive: true });
-    writeFileSync(
-      path.join(artifactsDir, 'nested', 'report one.txt'),
-      'download me',
-      'utf8',
-    );
+    writeFileSync(path.join(artifactsDir, 'nested', 'report one.txt'), 'download me', 'utf8');
 
     const response = await service.listArtifacts(job_id, 'https://api.example.test/');
 
@@ -58,10 +54,7 @@ describe('JobsService.listArtifacts', () => {
     assert.equal(response.artifacts[0].size_bytes, 11);
 
     const downloadUrl = new URL(response.artifacts[0].download_url);
-    assert.equal(
-      downloadUrl.origin + downloadUrl.pathname,
-      `https://api.example.test/jobs/${job_id}/artifact`,
-    );
+    assert.equal(downloadUrl.origin + downloadUrl.pathname, `https://api.example.test/jobs/${job_id}/artifact`);
     assert.equal(downloadUrl.searchParams.get('path'), 'nested/report one.txt');
     assert.match(downloadUrl.searchParams.get('signature') || '', /^[0-9a-f]{64}$/);
 
@@ -70,10 +63,7 @@ describe('JobsService.listArtifacts', () => {
       'nested/report one.txt',
       downloadUrl.searchParams.get('signature') || '',
     );
-    assert.equal(
-      file.absolutePath,
-      path.join(artifactsDir, 'nested', 'report one.txt'),
-    );
+    assert.equal(file.absolutePath, path.join(artifactsDir, 'nested', 'report one.txt'));
   });
 
   test('uses PUBLIC_BASE_URL before the request origin for artifact URLs', async () => {
@@ -89,10 +79,7 @@ describe('JobsService.listArtifacts', () => {
       const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
       writeFileSync(path.join(artifactsDir, 'report.txt'), 'ok', 'utf8');
 
-      const response = await service.listArtifacts(
-        job_id,
-        'https://request.example.test',
-      );
+      const response = await service.listArtifacts(job_id, 'https://request.example.test');
 
       assert.equal(
         response.artifacts[0].download_url,
@@ -128,14 +115,13 @@ describe('JobsService.listArtifacts', () => {
     };
 
     const service = createJobsService(logsStore, storageRoot, noopScheduler);
-    const script = (service as unknown as {
-      commandsScript(dto: RunJobCommandsDto): string;
-    }).commandsScript(dto);
+    const script = (
+      service as unknown as {
+        commandsScript(dto: RunJobCommandsDto): string;
+      }
+    ).commandsScript(dto);
 
-    assert.match(
-      script,
-      /convert .*mixed-pixel-art\.png/,
-    );
+    assert.match(script, /convert .*mixed-pixel-art\.png/);
     assert.match(
       script,
       /cargo run --release -- mixed-pixel-art\.png \/artifacts\/spritefusion-pixel-snapped\.png 4 --pixel-size 8/,
@@ -155,21 +141,12 @@ describe('JobsService.listArtifacts', () => {
     const response = await service.listArtifacts(job_id, 'https://api.example.test');
 
     assert.equal(response.artifacts.length, 1);
-    assert.equal(
-      response.artifacts[0].name,
-      'spritefusion-pixel-snapped.png',
-    );
+    assert.equal(response.artifacts[0].name, 'spritefusion-pixel-snapped.png');
     assert.equal(response.artifacts[0].size_bytes, statSync(outputImage).size);
 
     const downloadUrl = new URL(response.artifacts[0].download_url);
-    assert.equal(
-      downloadUrl.origin + downloadUrl.pathname,
-      `https://api.example.test/jobs/${job_id}/artifact`,
-    );
-    assert.equal(
-      downloadUrl.searchParams.get('path'),
-      'spritefusion-pixel-snapped.png',
-    );
+    assert.equal(downloadUrl.origin + downloadUrl.pathname, `https://api.example.test/jobs/${job_id}/artifact`);
+    assert.equal(downloadUrl.searchParams.get('path'), 'spritefusion-pixel-snapped.png');
     assert.match(downloadUrl.searchParams.get('signature') || '', /^[0-9a-f]{64}$/);
 
     const file = await service.getArtifactFile(
@@ -199,18 +176,9 @@ describe('JobsService.listArtifacts', () => {
     const signature = new URL(report.download_url).searchParams.get('signature');
     assert.ok(signature);
 
-    await assert.rejects(
-      () => service.getArtifactFile(job_id, 'report.txt', ''),
-      UnauthorizedException,
-    );
-    await assert.rejects(
-      () => service.getArtifactFile(job_id, 'report.txt', 'not-hex'),
-      UnauthorizedException,
-    );
-    await assert.rejects(
-      () => service.getArtifactFile(job_id, 'other.txt', signature),
-      UnauthorizedException,
-    );
+    await assert.rejects(() => service.getArtifactFile(job_id, 'report.txt', ''), UnauthorizedException);
+    await assert.rejects(() => service.getArtifactFile(job_id, 'report.txt', 'not-hex'), UnauthorizedException);
+    await assert.rejects(() => service.getArtifactFile(job_id, 'other.txt', signature), UnauthorizedException);
     await assert.rejects(
       () => service.getArtifactFile(otherJob.job_id, 'report.txt', signature),
       UnauthorizedException,
@@ -228,9 +196,6 @@ describe('JobsService.listArtifacts', () => {
     const artifactsDir = path.join(storageRoot, job_id, 'artifacts');
     writeFileSync(path.join(artifactsDir, 'report.txt'), 'ok', 'utf8');
 
-    await assert.rejects(
-      () => service.listArtifacts(job_id, 'https://api.example.test'),
-      InternalServerErrorException,
-    );
+    await assert.rejects(() => service.listArtifacts(job_id, 'https://api.example.test'), InternalServerErrorException);
   });
 });

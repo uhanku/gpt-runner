@@ -1,8 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  RunJobCommandsDto,
-  StartJobDto,
-} from '../dto/create-job.dto';
+import { RunJobCommandsDto, StartJobDto } from '../dto/create-job.dto';
 
 @Injectable()
 export class JobScriptBuilder {

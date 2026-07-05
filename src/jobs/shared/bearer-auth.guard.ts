@@ -14,10 +14,10 @@ export class BearerAuthGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const isPublicRoute = this.reflector.getAllAndOverride<boolean>(
-      IS_PUBLIC_ROUTE,
-      [context.getHandler(), context.getClass()],
-    );
+    const isPublicRoute = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_ROUTE, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
 
     if (isPublicRoute) {
       return true;
@@ -26,9 +26,7 @@ export class BearerAuthGuard implements CanActivate {
     const apiKey = process.env.ACTION_API_KEY;
 
     if (!apiKey) {
-      throw new InternalServerErrorException(
-        'Server misconfigured: ACTION_API_KEY is not set.',
-      );
+      throw new InternalServerErrorException('Server misconfigured: ACTION_API_KEY is not set.');
     }
 
     const request = context.switchToHttp().getRequest<Request>();

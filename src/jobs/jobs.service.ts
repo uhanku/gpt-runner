@@ -1,24 +1,9 @@
-import {
-  ConflictException,
-  Inject,
-  Injectable,
-  NotFoundException,
-  Optional,
-} from '@nestjs/common';
+import { ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { existsSync, rmSync } from 'node:fs';
-import {
-  RunJobCommandsDto,
-  StartJobDto,
-  UploadJobFilesDto,
-} from './dto/create-job.dto';
+import { RunJobCommandsDto, StartJobDto, UploadJobFilesDto } from './dto/create-job.dto';
 import { JobLogsStore, RecentJobLogEntry } from './shared/job-logs.store';
-import {
-  JOB_FILE_FETCH,
-  JOB_SCHEDULE_IMMEDIATE,
-  JOB_STORAGE_ROOT,
-  type FileFetch,
-} from './shared/job.tokens';
+import { JOB_FILE_FETCH, JOB_SCHEDULE_IMMEDIATE, JOB_STORAGE_ROOT, type FileFetch } from './shared/job.tokens';
 import type { JobSpec, JobState, JobStatus, JobSummary } from './shared/job.types';
 import { JobArtifactsService } from './artifacts/job-artifacts.service';
 import { ArtifactSignerService } from './artifacts/artifact-signer.service';
@@ -31,9 +16,7 @@ import { JobUrlService } from './job-url.service';
 
 @Injectable()
 export class JobsService {
-  private readonly maxLogTailBytes = Number(
-    process.env.MAX_LOG_TAIL_BYTES || 20000,
-  );
+  private readonly maxLogTailBytes = Number(process.env.MAX_LOG_TAIL_BYTES || 20000);
 
   private readonly paths: JobPathsService;
   private readonly statuses: JobStore;
@@ -65,35 +48,17 @@ export class JobsService {
     this.urls = jobUrlService ?? new JobUrlService();
 
     this.scriptBuilder = jobScriptBuilder ?? new JobScriptBuilder();
-    const runner =
-      jobRunner ??
-      new JobRunnerService(
-        this.paths,
-        this.statuses,
-        this.jobLogsStore,
-        this.scriptBuilder,
-      );
-    const files =
-      jobFiles ?? new JobFilesService(this.statuses, this.paths, fileFetch);
+    const runner = jobRunner ?? new JobRunnerService(this.paths, this.statuses, this.jobLogsStore, this.scriptBuilder);
+    const files = jobFiles ?? new JobFilesService(this.statuses, this.paths, fileFetch);
     const artifacts =
-      jobArtifacts ??
-      new JobArtifactsService(
-        this.statuses,
-        this.paths,
-        new ArtifactSignerService(),
-        this.urls,
-      );
+      jobArtifacts ?? new JobArtifactsService(this.statuses, this.paths, new ArtifactSignerService(), this.urls);
 
     this.runner = runner;
     this.files = files;
     this.artifacts = artifacts;
   }
 
-  async createJob(
-    job: JobSpec,
-    dockerImageName: string,
-    fallbackBaseUrl?: string,
-  ) {
+  async createJob(job: JobSpec, dockerImageName: string, fallbackBaseUrl?: string) {
     const jobId = randomUUID();
     const baseUrl = this.urls.publicBaseUrl(fallbackBaseUrl);
 
@@ -135,11 +100,7 @@ export class JobsService {
     return this.jobLogsStore.recent(limit);
   }
 
-  async startJob(
-    jobId: string,
-    dto: StartJobDto,
-    fallbackBaseUrl?: string,
-  ) {
+  async startJob(jobId: string, dto: StartJobDto, fallbackBaseUrl?: string) {
     const status = await this.statuses.readJob(jobId);
     if (status.status === 'running') {
       throw new ConflictException('Job is already running');
@@ -156,28 +117,17 @@ export class JobsService {
 
     this.scheduleImmediate(() => {
       void this.runner.runBootstrap(jobId, dto).catch((error) => {
-        process.stderr.write(
-          `[gpt-runner] failed to bootstrap job ${jobId}: ${String(error)}\n`,
-        );
+        process.stderr.write(`[gpt-runner] failed to bootstrap job ${jobId}: ${String(error)}\n`);
       });
     });
 
-    return this.jobEnvelope(
-      jobId,
-      'running',
-      this.urls.publicBaseUrl(fallbackBaseUrl),
-      {
-        goal: status.goal,
-        ...(status.repo_url !== undefined ? { repo_url: status.repo_url } : {}),
-      },
-    );
+    return this.jobEnvelope(jobId, 'running', this.urls.publicBaseUrl(fallbackBaseUrl), {
+      goal: status.goal,
+      ...(status.repo_url !== undefined ? { repo_url: status.repo_url } : {}),
+    });
   }
 
-  async runCommands(
-    jobId: string,
-    dto: RunJobCommandsDto,
-    fallbackBaseUrl?: string,
-  ) {
+  async runCommands(jobId: string, dto: RunJobCommandsDto, fallbackBaseUrl?: string) {
     const status = await this.statuses.readJob(jobId);
     if (status.status === 'running') {
       throw new ConflictException('Job is already running');
@@ -190,28 +140,17 @@ export class JobsService {
 
     this.scheduleImmediate(() => {
       void this.runner.runCommands(jobId, dto).catch((error) => {
-        process.stderr.write(
-          `[gpt-runner] failed to run commands for job ${jobId}: ${String(error)}\n`,
-        );
+        process.stderr.write(`[gpt-runner] failed to run commands for job ${jobId}: ${String(error)}\n`);
       });
     });
 
-    return this.jobEnvelope(
-      jobId,
-      'running',
-      this.urls.publicBaseUrl(fallbackBaseUrl),
-      {
-        goal: status.goal,
-        ...(status.repo_url !== undefined ? { repo_url: status.repo_url } : {}),
-      },
-    );
+    return this.jobEnvelope(jobId, 'running', this.urls.publicBaseUrl(fallbackBaseUrl), {
+      goal: status.goal,
+      ...(status.repo_url !== undefined ? { repo_url: status.repo_url } : {}),
+    });
   }
 
-  async uploadFile(
-    jobId: string,
-    dto: UploadJobFilesDto,
-    files: Express.Multer.File[] = [],
-  ) {
+  async uploadFile(jobId: string, dto: UploadJobFilesDto, files: Express.Multer.File[] = []) {
     return this.files.uploadFile(jobId, dto, files);
   }
 
@@ -253,12 +192,7 @@ export class JobsService {
     };
   }
 
-  private jobEnvelope(
-    jobId: string,
-    status: JobState,
-    baseUrl: string,
-    job?: JobSpec,
-  ) {
+  private jobEnvelope(jobId: string, status: JobState, baseUrl: string, job?: JobSpec) {
     const envelope: {
       job_id: string;
       status: JobState;
@@ -289,15 +223,5 @@ export class JobsService {
   }
 }
 
-export {
-  JOB_FILE_FETCH,
-  JOB_SCHEDULE_IMMEDIATE,
-  JOB_STORAGE_ROOT,
-} from './shared/job.tokens';
-export type {
-  JobSpec,
-  JobState,
-  JobStatus,
-  JobSummary,
-  ReferencedFile,
-} from './shared/job.types';
+export { JOB_FILE_FETCH, JOB_SCHEDULE_IMMEDIATE, JOB_STORAGE_ROOT } from './shared/job.tokens';
+export type { JobSpec, JobState, JobStatus, JobSummary, ReferencedFile } from './shared/job.types';

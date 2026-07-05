@@ -3,10 +3,10 @@ services:
     image: mongo:7
     container_name: gpt-runner-mongo
     ports:
-      - "127.0.0.1:27017:27017"
+      - '127.0.0.1:27017:27017'
     volumes:
       - mongo-data:/data/db
-    command: ["mongod", "--bind_ip_all"]
+    command: ['mongod', '--bind_ip_all']
     restart: unless-stopped
 
 volumes:
