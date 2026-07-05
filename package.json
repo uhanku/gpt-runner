@@ -10,10 +10,11 @@
     "build:spritefusion": "bash images/build-spritefusion.sh",
     "build:images": "bash images/build-all.sh",
     "seed:available-images": "node -r ts-node/register src/seeds/available-docker-images.seed.ts",
+    "test:integration": "bash scripts/test-integration.sh",
+    "ci": "bash scripts/ci.sh",
     "lint": "npx tsc --noEmit -p tsconfig.json",
-    "pretest": "npm run lint && npm run seed:available-images",
-    "test": "node -r ts-node/register --test test/**/*.test.ts",
-    "test:spritefusion-workflow": "node -r ts-node/register --test test/**/*.integration.ts"
+    "pretest": "npm run lint",
+    "test": "node -r ts-node/register --test test/**/*.test.ts"
   },
   "repository": {
     "type": "git",

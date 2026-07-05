@@ -100,7 +100,11 @@ Artifact download URLs are signed and public. Each artifact URL includes a `sign
 
 The SpriteFusion image build helper lives at `images/build-spritefusion.sh`.
 
-Running `npm run test` also seeds the available Docker image catalog before the test suite starts.
+`npm run test` runs the unit test suite.
+
+`npm run test:integration` seeds the available Docker image catalog, builds the Docker images, and then runs the integration test suite.
+
+`npm run ci` runs lint/typecheck, unit tests, and integration tests in that order.
 
 ## API Notes
 
