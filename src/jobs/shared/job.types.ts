@@ -5,7 +5,7 @@ export interface JobSpec {
   repo_url?: string;
 }
 
-export interface JobStatus {
+export interface JobRecord {
   _id: string;
   status: JobState;
   created_at: string;
@@ -14,19 +14,14 @@ export interface JobStatus {
   goal: string;
   repo_url?: string;
   available_job_id: string;
+}
+
+export interface JobStatus extends JobRecord {
   docker_image_name: string;
   logs_tail?: string;
 }
 
-export interface JobSummary {
-  _id: string;
-  status: JobState;
-  created_at: string;
-  updated_at: string;
-  return_code: number | null;
-  goal: string;
-  repo_url?: string;
-  available_job_id: string;
+export interface JobSummary extends JobRecord {
   docker_image_name: string;
 }
 

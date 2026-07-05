@@ -4,7 +4,7 @@ import { JobLogsStore } from '../../../src/jobs/shared/job-logs.store';
 import { tmpdir } from 'node:os';
 import { mkdtempSync } from 'node:fs';
 import path from 'node:path';
-import type { JobStatus } from '../../../src/jobs/shared/job.types';
+import type { JobRecord } from '../../../src/jobs/shared/job.types';
 
 export const TEST_AVAILABLE_JOB_NAME = 'gpt-runner:test-image';
 export const TEST_AVAILABLE_JOB_ID = '507f1f77bcf86cd799439011';
@@ -30,16 +30,16 @@ export function createJobSpec(overrides: Partial<{ goal: string; repo_url?: stri
   };
 }
 
-export function cloneJob(job: JobStatus): JobStatus {
+export function cloneJob(job: JobRecord): JobRecord {
   return { ...job };
 }
 
-export function createJobStoreMock(initialJobs: JobStatus[] = []) {
+export function createJobStoreMock(initialJobs: JobRecord[] = []) {
   const entries = new Map(initialJobs.map((job) => [job._id, cloneJob(job)]));
 
   return {
     entries,
-    writeJob: async (jobId: string, status: JobStatus) => {
+    writeJob: async (jobId: string, status: JobRecord) => {
       entries.set(jobId, cloneJob(status));
     },
     readJob: async (jobId: string) => {

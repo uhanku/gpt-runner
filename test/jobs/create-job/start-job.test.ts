@@ -138,7 +138,6 @@ describe('JobsService.startJob', () => {
           goal: 'Queue the job for later execution.',
           repo_url: 'https://github.com/example/queued.git',
           available_job_id: TEST_AVAILABLE_JOB_ID,
-          docker_image_name: 'gpt-runner:test-image',
         },
       ]);
       const stateService = createJobsService(logsStore, storageRoot, scheduler, jobStore);

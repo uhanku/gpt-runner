@@ -38,7 +38,6 @@ describe('JobsService.listJobs', () => {
         updated_at: '2026-01-01T10:05:00.000Z',
         return_code: 0,
         available_job_id: TEST_AVAILABLE_JOB_ID,
-        docker_image_name: 'gpt-runner:test-image',
       },
       {
         _id: 'job-newer',
@@ -49,7 +48,6 @@ describe('JobsService.listJobs', () => {
         updated_at: '2026-01-02T10:30:00.000Z',
         return_code: null,
         available_job_id: TEST_AVAILABLE_JOB_ID,
-        docker_image_name: 'gpt-runner:test-image',
       },
     ]);
     const service = createJobsService(logsStore, storageRoot, noopScheduler, jobStore);

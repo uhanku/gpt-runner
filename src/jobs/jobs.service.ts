@@ -4,7 +4,7 @@ import { Types } from 'mongoose';
 import { RunJobCommandsDto, StartJobDto, UploadJobFilesDto } from './dto/create-job.dto';
 import { JobLogsStore, RecentJobLogEntry } from './shared/job-logs.store';
 import { JOB_FILE_FETCH, JOB_SCHEDULE_IMMEDIATE, JOB_STORAGE_ROOT, type FileFetch } from './shared/job.tokens';
-import type { JobSpec, JobState, JobStatus, JobSummary } from './shared/job.types';
+import type { JobRecord, JobSpec, JobState, JobStatus, JobSummary } from './shared/job.types';
 import { JobArtifactsService } from './artifacts/job-artifacts.service';
 import { ArtifactSignerService } from './artifacts/artifact-signer.service';
 import { JobFilesService } from './files/job-files.service';
@@ -70,7 +70,7 @@ export class JobsService {
 
     this.paths.ensureJobDirs(jobId);
 
-    const status: JobStatus = {
+    const status: JobRecord = {
       _id: jobId,
       status: 'queued',
       created_at: this.nowIso(),
@@ -79,7 +79,6 @@ export class JobsService {
       goal: job.goal,
       ...(job.repo_url !== undefined ? { repo_url: job.repo_url } : {}),
       available_job_id: availableJob.id,
-      docker_image_name: availableJob.name,
     };
 
     await this.statuses.writeJob(jobId, status);
@@ -89,18 +88,26 @@ export class JobsService {
 
   async getJob(jobId: string) {
     const status = await this.statuses.readJob(jobId);
+    const availableJob = await this.availableJobsStore.getJob(status.available_job_id);
     return {
       ...status,
+      docker_image_name: availableJob.name,
       logs_tail: await this.jobLogsStore.tail(jobId, this.maxLogTailBytes),
     };
   }
 
   async listJobs(): Promise<JobSummary[]> {
-    return this.statuses.listJobs();
+    const [jobs, availableJobs] = await Promise.all([this.statuses.listJobs(), this.availableJobsStore.listJobs()]);
+    const dockerImageNames = new Map(availableJobs.map((job) => [job.id, job.name]));
+
+    return jobs.map((job) => this.enrichJobSummary(job, dockerImageNames));
   }
 
   async listQueuedJobs(): Promise<JobSummary[]> {
-    return this.statuses.listQueuedJobs();
+    const [jobs, availableJobs] = await Promise.all([this.statuses.listQueuedJobs(), this.availableJobsStore.listJobs()]);
+    const dockerImageNames = new Map(availableJobs.map((job) => [job.id, job.name]));
+
+    return jobs.map((job) => this.enrichJobSummary(job, dockerImageNames));
   }
 
   async getRecentLogs(limit = 50): Promise<RecentJobLogEntry[]> {
@@ -225,6 +232,19 @@ export class JobsService {
     }
 
     return envelope;
+  }
+
+  private enrichJobSummary(job: JobRecord, dockerImageNames: Map<string, string>): JobSummary {
+    const docker_image_name = dockerImageNames.get(job.available_job_id);
+
+    if (!docker_image_name) {
+      throw new NotFoundException(`Available job not found: ${job.available_job_id}`);
+    }
+
+    return {
+      ...job,
+      docker_image_name,
+    };
   }
 
   private nowIso(): string {

@@ -10,7 +10,6 @@ export interface JobDocument {
   goal: string;
   repo_url?: string;
   available_job_id: string;
-  docker_image_name: string;
 }
 
 export const JOB_MODEL_NAME = 'Job';
@@ -45,11 +44,6 @@ export const jobSchema = new Schema<JobDocument>(
       type: String,
     },
     available_job_id: {
-      type: String,
-      required: true,
-      index: true,
-    },
-    docker_image_name: {
       type: String,
       required: true,
       index: true,

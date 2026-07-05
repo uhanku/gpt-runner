@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import mongoose, { Connection, Model } from 'mongoose';
 import { JOB_MODEL_NAME, jobSchema, type JobDocument } from '../schemas/job.schema';
-import type { JobStatus, JobSummary } from '../shared/job.types';
+import type { JobRecord } from '../shared/job.types';
 
 @Injectable()
 export class JobStore {
@@ -35,14 +35,17 @@ export class JobStore {
     }
   }
 
-  async writeJob(jobId: string, status: JobStatus) {
+  async writeJob(jobId: string, status: JobRecord) {
     const filter = { _id: new mongoose.Types.ObjectId(jobId) };
-    const { _id, ...update } = status;
+    const { _id, docker_image_name: _dockerImageName, logs_tail: _logsTail, ...update } = status as JobRecord & {
+      docker_image_name?: string;
+      logs_tail?: string;
+    };
 
     await this.jobsModel().updateOne(filter, { $set: update }, { upsert: true });
   }
 
-  async readJob(jobId: string): Promise<JobStatus> {
+  async readJob(jobId: string): Promise<JobRecord> {
     const document = await this.jobsModel().findOne({ _id: new mongoose.Types.ObjectId(jobId) }).lean();
 
     if (!document) {
@@ -56,13 +59,13 @@ export class JobStore {
     await this.jobsModel().deleteOne({ _id: new mongoose.Types.ObjectId(jobId) });
   }
 
-  async listJobs(): Promise<JobSummary[]> {
+  async listJobs(): Promise<JobRecord[]> {
     const documents = await this.jobsModel().find({}).sort({ updated_at: -1, created_at: -1, _id: -1 }).lean();
 
     return documents.map((document) => normalizeJobRecord(document as JobDocument));
   }
 
-  async listQueuedJobs(): Promise<JobSummary[]> {
+  async listQueuedJobs(): Promise<JobRecord[]> {
     const documents = await this.jobsModel().find({ status: 'queued' }).sort({ updated_at: -1, created_at: -1, _id: -1 }).lean();
 
     return documents.map((document) => normalizeJobRecord(document as JobDocument));
@@ -77,7 +80,7 @@ export class JobStore {
   }
 }
 
-function normalizeJobRecord(document: JobDocument): JobStatus {
+function normalizeJobRecord(document: JobDocument): JobRecord {
   const goal = typeof document.goal === 'string' ? document.goal : undefined;
 
   if (goal === undefined) {
@@ -95,6 +98,5 @@ function normalizeJobRecord(document: JobDocument): JobStatus {
     goal,
     ...(repo_url !== undefined ? { repo_url } : {}),
     available_job_id: document.available_job_id,
-    docker_image_name: document.docker_image_name,
   };
 }

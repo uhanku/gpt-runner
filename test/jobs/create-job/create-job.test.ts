@@ -49,7 +49,6 @@ describe('JobsService.createJob', () => {
       goal: 'Run the repository test suite.',
       repo_url: 'https://github.com/pallets/flask.git',
       available_job_id: TEST_AVAILABLE_JOB_ID,
-      docker_image_name: 'gpt-runner:test-image',
     });
   });
 
@@ -75,7 +74,6 @@ describe('JobsService.createJob', () => {
       goal: 'Collect logs for the failing build.',
       repo_url: 'https://github.com/pallets/flask.git',
       available_job_id: TEST_AVAILABLE_JOB_ID,
-      docker_image_name: 'gpt-runner:test-image',
     });
   });
 
