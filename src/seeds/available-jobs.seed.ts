@@ -4,7 +4,7 @@ import type { AvailableJobDocument } from '../jobs/schemas/available-job.schema'
 
 export const AVAILABLE_JOB_SEEDS: AvailableJobDocument[] = [
   {
-    name: 'images/Dockerfile.spritefusion',
+    name: 'gpt-runner:spritefusion',
     goal: 'remove pixel art mixels from ai and scale that image',
   },
 ];

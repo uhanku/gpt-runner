@@ -74,16 +74,16 @@ describe('AvailableJobsStore', () => {
     (store as unknown as { jobModel: typeof model }).jobModel = model;
 
     await store.upsert({
-      name: 'images/Dockerfile.spritefusion',
+      name: 'gpt-runner:spritefusion',
       goal: 'remove pixel art mixels from ai and scale that image',
     });
 
     assert.deepEqual(model.state.updates, [
       {
-        filter: { name: 'images/Dockerfile.spritefusion' },
+        filter: { name: 'gpt-runner:spritefusion' },
         update: {
           $set: {
-            name: 'images/Dockerfile.spritefusion',
+            name: 'gpt-runner:spritefusion',
             goal: 'remove pixel art mixels from ai and scale that image',
           },
         },
